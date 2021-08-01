@@ -1,0 +1,78 @@
+use crate::ast;
+use ast::{TermNode, TermProvider, ExprNode, ExprProvider};
+
+grammar(term_provider: &TermProvider, expr_provider: &ExprProvider);
+
+pub Expr = {
+    <Impl> EOL?,
+};
+
+EOL: () = {
+    "$" => (),
+}
+
+Impl = {
+    Disj,
+    <l:Disj> "->" <r:Impl> => expr_provider.imp(&l, &r)
+};
+
+Disj = {
+    Conj,
+    <l:Disj> "|" <r:Conj> => expr_provider.disj(&l, &r),
+};
+
+Conj = {
+    Unary,
+    <l:Conj> "&" <r:Unary> => expr_provider.conj(&l, &r),
+};
+
+Unary = {
+    Predicate,
+    "(" <Impl> ")",
+    "!" <Unary> => expr_provider.neg(&<>),
+
+    <v:Any> <e:Impl> EOL => expr_provider.any(v, &e),
+    <v:Exists> <e:Impl> EOL => expr_provider.ext(v, &e),
+
+    "(" <v:Any> <e:Impl> ")" => expr_provider.any(v, &e),
+    "(" <v:Exists> <e:Impl> ")" => expr_provider.ext(v, &e),
+};
+
+Any = {
+    "@" <Var> ".",
+};
+
+Exists = {
+    "?" <Var> ",",
+};
+
+Predicate: ExprNode = {
+    r"[A-Z]" => expr_provider.pred(<>.chars().next().unwrap()),
+    <l:Term> "=" <r:Term> => expr_provider.eq(&l, &r),
+};
+
+
+pub Term: TermNode = {
+    Summed,
+    <l:Term> "+" <r:Summed> => term_provider.add(&l, &r),
+};
+
+Summed: TermNode = {
+    Multiplier,
+    <l:Summed> "*" <r:Multiplier> => term_provider.mul(&l, &r),
+};
+
+Multiplier: TermNode = {
+    Variable,
+    "(" <Term> ")",
+    "0" => term_provider.zero(),
+    <Multiplier> "'" => term_provider.next(&<>),
+};
+
+Variable: TermNode = {
+    Var => term_provider.var(<>)
+};
+
+Var: char = {
+    r"[a-z]" => <>.chars().next().unwrap(),
+}
