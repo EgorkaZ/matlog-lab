@@ -1,11 +1,25 @@
-use std::{cell::RefCell, collections::HashSet, fmt::{Display, Write}, hash::Hash, rc::Rc, ptr};
+use std::{cell::RefCell, collections::HashSet, fmt::{Display, Write}, hash::Hash, marker::PhantomData, ptr, rc::Rc};
 
-use super::node_provider::{OperNode, OperNodeProvider};
+use super::{node_provider::{OperNode, OperNodeProvider}, helpers::{Variable, VarType}};
+use crate::tree::{ChildrenIter, Tree};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TermVarType;
+
+impl VarType for TermVarType
+{
+    fn type_name() -> &'static str {
+        "Var"
+    }
+}
+
+pub type TermVar = Variable<TermVarType>;
+
 
 #[derive(Debug, Clone, Eq)]
 pub enum Term
 {
-    Variable(char),
+    Var(TermVar),
     Zero,
     BiOp(BinOper, TermNode, TermNode),
     UnOp(UnOper, TermNode),
@@ -32,7 +46,7 @@ impl Display for Term
         use Term::*;
 
         match self {
-            Variable(name) => f.write_char(*name),
+            Var(var) => var.fmt(f),
             Zero => f.write_char('0'),
             UnOp(UnOper::Next, sub) => f.write_char('(')
                 .and_then(|()| sub.fmt(f))
@@ -75,13 +89,13 @@ impl Hash for Term
         use Term::*;
 
         match self {
-            Variable(name) => {
+            Var(var) => {
                 state.write_u8(0);
-                name.hash(state)
+                var.hash(state)
             },
             Zero => state.write_u8(1),
             UnOp(op, sub) => {
-                state.write_u8(3);
+                state.write_u8(2);
                 op.hash(state);
                 ptr::hash(Rc::as_ptr(sub), state)
             },
@@ -90,7 +104,7 @@ impl Hash for Term
                 op.hash(state);
                 ptr::hash(Rc::as_ptr(l), state);
                 ptr::hash(Rc::as_ptr(r), state)
-            }
+            },
         }
     }
 }
@@ -101,7 +115,7 @@ impl PartialEq for Term
         use Term::*;
 
         match (self, other) {
-            (Variable(l), Variable(r)) => l == r,
+            (Var(l), Var(r)) => l == r,
             (Zero, Zero) => true,
             (UnOp(l_op, l_sub), UnOp(r_op, r_sub)) => {
                 l_op == r_op &&
@@ -117,6 +131,22 @@ impl PartialEq for Term
     }
 }
 
+impl Tree for Term
+{
+    type Child = TermNode;
+
+    fn children(&self) -> crate::tree::ChildrenIter<'_, Self> {
+        use Term::*;
+
+        match self {
+            UnOp(_, sub) => ChildrenIter::new(vec![sub]),
+            BiOp(_, l, r) => ChildrenIter::new(vec![l, r]),
+            _ => ChildrenIter::new(Vec::new())
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct TermProvider
 {
     saved: RefCell<HashSet<Rc<Term>>>
@@ -152,7 +182,7 @@ impl TermProvider
     {
         self.un_op(UnOper::Next, sub)
     }
-    
+
     pub fn zero(&self) -> TermNode
     {
         self.get_or_insert(Term::Zero)
@@ -160,6 +190,11 @@ impl TermProvider
 
     pub fn var(&self, name: char) -> TermNode
     {
-        self.get_or_insert(Term::Variable(name))
+        self.get_or_insert(Term::Var(TermVar::Static(name, PhantomData)))
+    }
+
+    pub fn repl(&self, name: &str) -> TermNode
+    {
+        self.get_or_insert(Term::Var(TermVar::Dynamic(String::from(name))))
     }
 }

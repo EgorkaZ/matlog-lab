@@ -1,4 +1,4 @@
-lalrpop_mod!(pub terms, "/parser/terms.rs");
+#[allow(clippy::all)] lalrpop_mod!(pub terms, "/parser/terms.rs");
 
-pub use terms::TermParser;
-pub use terms::ExprParser;
+pub mod manager;
+pub use manager::ExprManager;

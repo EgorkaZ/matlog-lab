@@ -3,17 +3,33 @@
 
 pub mod ast;
 pub mod parser;
+pub mod matcher;
+pub mod tree;
 
-use ast::TermProvider;
-use parser::ExprParser;
 
-use crate::ast::ExprProvider;
+use crate::{ast::{Expr}, matcher::{GetSubsts}, parser::ExprManager};
 
 fn main() {
-    let term_provider = TermProvider::new();
-    let expr_provider = ExprProvider::new();
-    let parser = ExprParser::new();
-    let parsed = parser.parse(&term_provider, &expr_provider, "0=0&(@x.x=x -> x'=x')->x=x$").unwrap();
+    let manager = ExprManager::new();
+    let parsed = manager.parse("a=a -> b=b -> a=a $");
+
     println!("I parsed: {}", parsed);
     println!("Here's debug version: {:?}", parsed);
+
+    let matcher_expr = manager.parse("a:Pred -> b:Pred -> a:Pred $");
+    println!("Matcher: {}", matcher_expr);
+    println!("Debug matcher: {:?}", matcher_expr);
+
+    let matcher = manager.matcher_node(matcher_expr);
+    let match_res = match matcher.match_expression(&parsed) {
+        Ok(substs) => substs.all_substs(|_, subst| matches!(&**subst, Expr::Eq(..))),
+        Err(_) => false,
+    };
+    println!("Match result: {}", match_res);
+
+    let scheme_matcher = manager.matcher_str("subst:Pred -> ?x:Var.orig:Pred $");
+    let match_res = scheme_matcher
+        .match_expression(&manager.parse("a + b = 0 -> ?c.c = 0 $"))
+        .map(|substs| format!("{:?}", substs));
+    println!("Scheme match res: {:?}", match_res);
 }

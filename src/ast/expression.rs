@@ -1,11 +1,25 @@
-use std::{cell::RefCell, collections::HashSet, fmt::{Display, Write}, hash::Hash, ptr, rc::Rc};
+use std::{cell::RefCell, collections::HashSet, fmt::{Display, Write}, hash::Hash, marker::PhantomData, ptr, rc::Rc};
 
-use super::{TermNode, TermProvider, node_provider::{OperNode, OperNodeProvider}};
+use crate::tree::{ChildrenIter, Tree};
+
+use super::{TermNode, TermVar, helpers::{VarType, Variable}, node_provider::{OperNode, OperNodeProvider}};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ExprVarType;
+
+impl VarType for ExprVarType
+{
+    fn type_name() -> &'static str {
+        "Pred"
+    }
+}
+
+pub type ExprPred = Variable<ExprVarType>;
 
 #[derive(Debug, Clone, Eq)]
 pub enum Expr
 {
-    Pred(char),
+    Pred(ExprPred),
     UnOp(UnOper, ExprNode),
     BiOp(BinOper, ExprNode, ExprNode),
     Eq(TermNode, TermNode),
@@ -21,12 +35,12 @@ pub enum BinOper
     Impl,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnOper
 {
     Neg,
-    Any(char),
-    Ext(char),
+    Any(TermVar),
+    Ext(TermVar),
 }
 
 impl Display for UnOper
@@ -61,7 +75,7 @@ impl Display for Expr
         use Expr::*;
 
         match self {
-            Pred(name) => f.write_char(*name),
+            Pred(name) => name.fmt(f),
             UnOp(op, sub) => f.write_fmt(format_args!("({}{})", op, sub)),
             BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
             Eq(l, r) => f.write_fmt(format_args!("({} = {})", l, r)),
@@ -109,7 +123,7 @@ impl Hash for Expr
                 state.write_u8(3);
                 ptr::hash(Rc::as_ptr(l), state);
                 ptr::hash(Rc::as_ptr(r), state)
-            }
+            },
         }
     }
 }
@@ -137,6 +151,21 @@ impl PartialEq for Expr
                     Rc::ptr_eq(l_r, r_r)
             },
             _ => false
+        }
+    }
+}
+
+impl Tree for Expr
+{
+    type Child = ExprNode;
+
+    fn children(&self) -> crate::tree::ChildrenIter<'_, Self> {
+        use Expr::*;
+
+        match self {
+            UnOp(_, sub) => ChildrenIter::new(vec![sub]),
+            BiOp(_, l, r) => ChildrenIter::new(vec![l, r]),
+            _ => ChildrenIter::new(Vec::new()),
         }
     }
 }
@@ -182,12 +211,12 @@ impl ExprProvider
         self.un_op(UnOper::Neg, sub)
     }
 
-    pub fn any(&self, var: char, sub: &ExprNode) -> ExprNode
+    pub fn any(&self, var: TermVar, sub: &ExprNode) -> ExprNode
     {
         self.un_op(UnOper::Any(var), sub)
     }
 
-    pub fn ext(&self, var: char, sub: &ExprNode) -> ExprNode
+    pub fn ext(&self, var: TermVar, sub: &ExprNode) -> ExprNode
     {
         self.un_op(UnOper::Ext(var), sub)
     }
@@ -199,6 +228,11 @@ impl ExprProvider
 
     pub fn pred(&self, name: char) -> ExprNode
     {
-        self.get_or_insert(Expr::Pred(name))
+        self.get_or_insert(Expr::Pred(ExprPred::Static(name, PhantomData)))
+    }
+
+    pub fn repl(&self, name: &str) -> ExprNode
+    {
+        self.get_or_insert(Expr::Pred(ExprPred::Dynamic(String::from(name))))
     }
 }

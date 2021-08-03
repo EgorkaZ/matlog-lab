@@ -1,5 +1,6 @@
 use crate::ast;
-use ast::{TermNode, TermProvider, ExprNode, ExprProvider};
+use ast::{TermNode, TermProvider, TermVar, ExprNode, ExprProvider};
+use std::marker::PhantomData;
 
 grammar(term_provider: &TermProvider, expr_provider: &ExprProvider);
 
@@ -43,13 +44,22 @@ Any = {
 };
 
 Exists = {
-    "?" <Var> ",",
+    "?" <Var> ".",
 };
 
 Predicate: ExprNode = {
-    r"[A-Z]" => expr_provider.pred(<>.chars().next().unwrap()),
+    StaticPred => expr_provider.pred(<>),
+    DynamicPred => expr_provider.repl(<>),
     <l:Term> "=" <r:Term> => expr_provider.eq(&l, &r),
 };
+
+StaticPred: char = {
+    r"[A-Z]" => <>.chars().next().unwrap(),
+}
+
+DynamicPred: &'input str = {
+    r"[a-z]+:Pred" => &<>[..<>.len() - 5],
+}
 
 
 pub Term: TermNode = {
@@ -70,9 +80,19 @@ Multiplier: TermNode = {
 };
 
 Variable: TermNode = {
-    Var => term_provider.var(<>)
+    StaticVar => term_provider.var(<>),
+    DynamicVar => term_provider.repl(<>),
 };
 
-Var: char = {
+Var: TermVar = {
+    StaticVar => TermVar::Static(<>, PhantomData),
+    DynamicVar => TermVar::Dynamic(String::from(<>)),
+}
+
+StaticVar: char = {
     r"[a-z]" => <>.chars().next().unwrap(),
+}
+
+DynamicVar: &'input str = {
+    r"[a-z]+:Var" => &<>[..<>.len() - 4],
 }
