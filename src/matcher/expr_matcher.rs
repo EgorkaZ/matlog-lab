@@ -20,119 +20,141 @@ impl<'a> Matcher<'a>
 
     pub fn match_expression(&self, checked: &ExprNode) -> MatchResult
     {
-        let mut term_substs = HashMap::new();
-        let mut expr_substs = HashMap::new();
-        match self.match_exprs(&self.basis, checked, &mut expr_substs, &mut term_substs) {
-            Ok(()) => Ok(Substitutions{ terms: term_substs, exprs: expr_substs }),
-            Err(err) => Err(err),
-        }
+        self.run_matching(checked, VarSubst::Bound)
+    }
+
+    pub fn match_expr_free_var_subst(&self, checked: &ExprNode, var_name: char) -> MatchResult
+    {
+        self.run_matching(checked, VarSubst::new(var_name))
     }
 
 // private:
+    fn run_matching(&self, expected: &ExprNode, mut var_subst: VarSubst) -> MatchResult
+    {
+        let mut vars_substs = HashMap::new();
+        let mut expr_substs = HashMap::new();
+        self.match_exprs(&self.basis, expected, &mut expr_substs, &mut vars_substs, &mut var_subst)
+            .map(|_| Substitutions{ vars: vars_substs, exprs: expr_substs, var: var_subst })
+    }
+
     fn match_exprs(&self, expected: &ExprNode, checked: &ExprNode,
         expr_substs: &mut HashMap<String, ExprNode>,
-        term_substs: &mut HashMap<String, TermNode>)-> Result<(), Mismatch>
+        vars_substs: &mut HashMap<String, char>,
+        var_subst: &mut VarSubst)-> Result<(), Mismatch>
     {
         use Expr::*;
 
+        let mut bound = VarSubst::Bound;
+        let var_subst = {
+            use ExprUnOp::*;
+            match &**expected {
+                UnOp(Any(TermVar::Static(name, ..)) | Ext(TermVar::Static(name, ..)), ..)
+                    if var_subst.has_name(*name) => &mut bound,
+                _ => var_subst
+            }
+        };
+
         match (&**expected, &**checked) {
             (Pred(ExprPred::Dynamic(dyn_name)), _) => {
-                match Self::check_substitution(dyn_name, checked, expr_substs) {
-                    Ok(()) => Ok(()),
-                    Err((expected, actual)) => Err(Mismatch::Expr{ expected, actual }),
-                }
+                Self::check_substitution(dyn_name, checked, expr_substs, Rc::ptr_eq)
             },
             (UnOp(ExprUnOp::Any(TermVar::Dynamic(dyn_name)), l_sub),
              UnOp(ExprUnOp::Any(TermVar::Static(st_name, ..)), r_sub)) => {
 
-                match Self::check_substitution(dyn_name, &self.term_provider.var(*st_name), term_substs) {
-                    Ok(()) => self.match_exprs(l_sub, r_sub, expr_substs, term_substs),
-                    Err((expected, actual)) => Err(Mismatch::Term{ expected, actual })
-                }
+                Self::check_substitution(dyn_name, st_name, vars_substs, char::eq)
+                    .and_then(|()| self.match_exprs(l_sub, r_sub, expr_substs, vars_substs, var_subst))
             },
             (UnOp(ExprUnOp::Ext(TermVar::Dynamic(dyn_name)), l_sub),
              UnOp(ExprUnOp::Ext(TermVar::Static(st_name, ..)), r_sub)) => {
-                match Self::check_substitution(dyn_name, &self.term_provider.var(*st_name), term_substs) {
-                    Ok(()) => self.match_exprs(l_sub, r_sub, expr_substs, term_substs),
-                    Err((expected, actual)) => Err(Mismatch::Term{ expected, actual })
-                }
+                Self::check_substitution(dyn_name, st_name, vars_substs, char::eq)
+                    .and_then(|()| self.match_exprs(l_sub, r_sub, expr_substs, vars_substs, var_subst))
             },
             (Pred(ExprPred::Static(l, ..)), Pred(ExprPred::Static(r, ..))) if l == r => Ok(()),
             (UnOp(l_op, l_sub), UnOp(r_op, r_sub)) if l_op == r_op => {
-                self.match_exprs(l_sub, r_sub, expr_substs, term_substs)
+                self.match_exprs(l_sub, r_sub, expr_substs, vars_substs, var_subst)
             },
             (BiOp(l_op, l_l, l_r), BiOp(r_op, r_l, r_r)) if l_op == r_op => {
-                self.match_exprs(l_l, r_l, expr_substs, term_substs)
-                    .and(self.match_exprs(l_r, r_r, expr_substs, term_substs))
+                self.match_exprs(l_l, r_l, expr_substs, vars_substs, var_subst)
+                    .and(self.match_exprs(l_r, r_r, expr_substs, vars_substs, var_subst))
             }
             (Eq(l_l, l_r), Eq(r_l, r_r)) => {
-                let cmp_res = Self::match_terms(l_l, r_l, term_substs)
-                    .and(Self::match_terms(l_r, r_r, term_substs));
-                match cmp_res {
-                    Ok(()) => Ok(()),
-                    Err((expected, actual)) => Err(Mismatch::Term{ expected, actual }),
-                }
+                Self::match_terms(l_l, r_l, vars_substs, var_subst)
+                    .and_then(|()| Self::match_terms(l_r, r_r, vars_substs, var_subst))
             }
             _ => Err(Mismatch::Expr{ expected: Rc::clone(expected), actual: Rc::clone(checked) }),
         }
     }
 
-    fn match_terms(expected: &TermNode, checked: &TermNode, term_substs: &mut HashMap<String, TermNode>) -> Result<(), (TermNode, TermNode)>
+    fn match_terms(expected: &TermNode, checked: &TermNode,
+        vars_substs: &mut HashMap<String, char>,
+        var_subst: &mut VarSubst) -> Result<(), Mismatch>
     {
         use Term::*;
 
         match (&**expected, &**checked) {
-            (Var(TermVar::Dynamic(l_dyn)), _) => {
-                Self::check_substitution(l_dyn, checked, term_substs)
+            (Var(TermVar::Dynamic(l_dyn)), Var(TermVar::Static(r_st, ..))) => {
+                Self::check_substitution(l_dyn, r_st, vars_substs, char::eq)
             }
             (Var(TermVar::Static(l, ..)), Var(TermVar::Static(r, ..))) if l == r => Ok(()),
             (UnOp(l_op, l_sub), UnOp(r_op, r_sub)) if l_op == r_op => {
-                Self::match_terms(l_sub, r_sub, term_substs)
+                Self::match_terms(l_sub, r_sub, vars_substs, var_subst)
             }
             (BiOp(l_op, l_l, l_r), BiOp(r_op, r_l, r_r)) if l_op == r_op => {
-                Self::match_terms(l_l, r_l, term_substs)
-                    .and(Self::match_terms(l_r, r_r, term_substs))
+                Self::match_terms(l_l, r_l, vars_substs, var_subst)
+                    .and(Self::match_terms(l_r, r_r, vars_substs, var_subst))
             },
             (Zero, Zero) => Ok(()),
-            _ => Err((Rc::clone(expected), Rc::clone(checked)))
+            (Var(TermVar::Static(var_name, ..)), ..) if var_subst.has_name(*var_name) => {
+                Self::check_substitution(var_name, checked, var_subst, Rc::ptr_eq)
+            }
+            _ => Err(Mismatch::from((Rc::clone(expected), Rc::clone(checked))))
         }
     }
 
-    fn check_substitution<Type, Key: Clone + Hash + Eq>(name: &Key, checked: &Rc<Type>, substs: &mut HashMap<Key, Rc<Type>>) -> Result<(), (Rc<Type>, Rc<Type>)>
+    fn check_substitution<Key, Substituted, Cmp>(
+            name: &Key,
+            checked: &Substituted,
+            substs: &mut impl SubstContainer<Key, Substituted>,
+            eq: Cmp) -> Result<(), Mismatch>
+        where Substituted: Clone,
+              Key: Clone + Eq + Hash,
+              Cmp: FnOnce(&Substituted, &Substituted) -> bool,
+              Mismatch: From<(Substituted, Substituted)>
     {
-        substs.check_substitution(name, checked)
-            .map_err(|expected| (expected, Rc::clone(checked)))
+        substs.check_substitution(name, checked, eq)
+            .map_err(|expected| Mismatch::from((expected, checked.clone())))
     }
 }
 
 #[derive(Debug)]
 pub struct Substitutions
 {
-    terms: HashMap<String, TermNode>,
+    vars: HashMap<String, char>,
     exprs: HashMap<String, ExprNode>,
+    var: VarSubst,
 }
 
-pub trait GetSubsts<Type>
+pub trait GetSubsts<Key, Substituted>
 {
-    fn get_substs(&self) -> &'_ HashMap<String, Rc<Type>>;
+    fn get_substs(&self) -> &'_ HashMap<String, Substituted>;
 
     fn all_substs<Pred>(&self, pred: Pred) -> bool
-        where Pred: Fn(&str, &Rc<Type>) -> bool
+        where Pred: Fn(&str, &Substituted) -> bool
     {
         self.get_substs().iter().all(|(name, subst)| pred(name, subst))
     }
 }
 
-impl GetSubsts<Term> for Substitutions
+impl GetSubsts<String, char> for Substitutions
 {
-    fn get_substs(&self) -> &'_ HashMap<String, Rc<Term>> {
-        &self.terms
+    fn get_substs(&self) -> &'_ HashMap<String, char> {
+        &self.vars
     }
 }
 
-impl GetSubsts<Expr> for Substitutions
+impl GetSubsts<String, ExprNode> for Substitutions
 {
-    fn get_substs(&self) -> &'_ HashMap<String, Rc<Expr>> {
+    fn get_substs(&self) -> &'_ HashMap<String, ExprNode> {
         &self.exprs
     }
 }
@@ -142,38 +164,76 @@ pub enum Mismatch
 {
     Expr{ expected: ExprNode, actual: ExprNode },
     Term{ expected: TermNode, actual: TermNode },
+    Variable{ expected: char, actual: char },
 }
 
 pub type MatchResult = Result<Substitutions, Mismatch>;
 
-struct FreeVarSubst
+impl From<(ExprNode, ExprNode)> for Mismatch
 {
-    name: char,
-    subst: Option<TermNode>,
-}
-
-impl FreeVarSubst
-{
-    fn new(name: char) -> Option<Self>
-    {
-        Some(Self{ name, subst: None })
+    fn from((expected, actual): (ExprNode, ExprNode)) -> Self {
+        Mismatch::Expr{ expected, actual }
     }
 }
 
-impl SubstContainer<char, Term> for FreeVarSubst
+impl From<(TermNode, TermNode)> for Mismatch
 {
-    fn get_subst(&self, key: &char) -> Option<&'_ Rc<Term>> {
-        if *key == self.name {
-            if let Some(subst) = &self.subst {
-                return Some(subst)
-            }
+    fn from((expected, actual): (TermNode, TermNode)) -> Self {
+        Mismatch::Term{ expected, actual }
+    }
+}
+
+impl From<(char, char)> for Mismatch
+{
+    fn from((expected, actual): (char, char)) -> Self {
+        Mismatch::Variable{ expected, actual }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum VarSubst
+{
+    Bound,
+    Free{ name: char, subst: Option<TermNode> },
+}
+
+impl VarSubst
+{
+    fn new(name: char) -> Self
+    {
+        Self::Free{ name, subst: None }
+    }
+
+    fn has_name(&self, name: char) -> bool
+    {
+        match &self {
+            Self::Free{ name: actual_name, .. } => name == *actual_name,
+            Self::Bound => false,
         }
-        None
+    }
+}
+
+impl SubstContainer<char, TermNode> for VarSubst
+{
+    fn get_subst(&self, key: &char) -> Option<&'_ TermNode> {
+        match &self {
+            Self::Free{ name, subst } if *name == *key => {
+                if let Some(subst) = &subst {
+                    Some(subst)
+                } else {
+                    None
+                }
+            },
+            _ => None
+        }
     }
 
     fn substitute(&mut self, key: &char, subst: Rc<Term>) {
-        if *key == self.name {
-            self.subst = Some(subst);
+        match self {
+            Self::Free{ name, subst: found } if *name == *key => {
+                *found = Some(subst);
+            },
+            _ => (),
         }
     }
 }

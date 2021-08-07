@@ -1,36 +1,40 @@
-use std::{cmp::Eq, collections::{HashMap}, hash::Hash, rc::Rc};
+use std::{cmp::Eq, collections::{HashMap}, hash::Hash};
 
-pub trait SubstContainer<Key: Clone, Type>
+pub trait SubstContainer<Key, Substituted>
+    where Key: Clone,
+          Substituted: Clone,
 {
-    fn get_subst(&self, key: &Key) -> Option<&'_ Rc<Type>>;
-    fn substitute(&mut self, key: &Key, subst: Rc<Type>);
+    fn get_subst(&self, key: &Key) -> Option<&'_ Substituted>;
+    fn substitute(&mut self, key: &Key, subst: Substituted);
 
-    fn check_substitution(&mut self, key: &Key, subst: &Rc<Type>) -> Result<(), Rc<Type>>
+    fn check_substitution<Cmp>(&mut self, key: &Key, subst: &Substituted, eq: Cmp) -> Result<(), Substituted>
+        where Cmp: FnOnce(&Substituted, &Substituted) -> bool
     {
         match self.get_subst(&key) {
             Some(found) => {
-                if Rc::ptr_eq(subst, found) {
+                if eq(subst, found) {
                     Ok(())
                 } else {
-                    Err(Rc::clone(found))
+                    Err(found.clone())
                 }
             },
             None => {
-                self.substitute(key, Rc::clone(subst));
+                self.substitute(key, subst.clone());
                 Ok(())
             }
         }
     }
 }
 
-impl<Key, Type> SubstContainer<Key, Type> for HashMap<Key, Rc<Type>>
-    where Key: Clone + Eq + Hash
+impl<Key, Substituted> SubstContainer<Key, Substituted> for HashMap<Key, Substituted>
+    where Key: Clone + Eq + Hash,
+          Substituted: Clone
 {
-    fn get_subst(&self, key: &Key) -> Option<&'_ Rc<Type>> {
+    fn get_subst(&self, key: &Key) -> Option<&'_ Substituted> {
         self.get(&key)
     }
 
-    fn substitute(&mut self, key: &Key, subst: Rc<Type>) {
+    fn substitute(&mut self, key: &Key, subst: Substituted) {
         self.insert(key.clone(), subst);
     }
 }
