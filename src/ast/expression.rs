@@ -1,8 +1,8 @@
-use std::{cell::RefCell, collections::HashSet, fmt::{Display, Write}, hash::Hash, marker::PhantomData, ptr, rc::Rc};
+use std::{cell::RefCell, collections::{HashSet}, fmt::{Display, Write}, hash::Hash, marker::PhantomData, ptr, rc::Rc};
 
-use crate::tree::{ChildrenIter, Tree};
+use crate::tree::{ChildrenIter, DfsDir, Tree};
 
-use super::{TermNode, TermVar, helpers::{VarType, Variable}, node_provider::{OperNode, OperNodeProvider}};
+use super::{Term, TermNode, TermVar, helpers::{VarType, Variable}, node_provider::{OperNode, OperNodeProvider}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExprVarType;
@@ -16,6 +16,23 @@ impl VarType for ExprVarType
 
 pub type ExprPred = Variable<ExprVarType>;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum UnOper
+{
+    Neg,
+    Any(TermVar),
+    Ext(TermVar),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BinOper
+{
+    Conj,
+    Disj,
+    Impl,
+}
+
+
 #[derive(Debug, Clone, Eq)]
 pub enum Expr
 {
@@ -27,74 +44,51 @@ pub enum Expr
 
 pub type ExprNode = Rc<Expr>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BinOper
+impl Expr
 {
-    Conj,
-    Disj,
-    Impl,
-}
+    pub fn free_variables(node: &ExprNode) -> impl Iterator<Item = &TermVar>
+    {
+        let term_into_vars = |term| {
+            Term::dfs(term)
+                .filter_map(|(curr, _)| {
+                    match &**curr {
+                        Term::Var(var) => Some(var),
+                        _ => None,
+                    }
+                })
+        };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum UnOper
-{
-    Neg,
-    Any(TermVar),
-    Ext(TermVar),
-}
-
-impl Display for UnOper
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use UnOper::*;
-
-        match self {
-            Neg => f.write_char('!'),
-            Any(var) => f.write_fmt(format_args!("@{}.", var)),
-            Ext(var) => f.write_fmt(format_args!("?{}.", var)),
-        }
-    }
-}
-
-impl Display for BinOper
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use BinOper::*;
-
-        match self {
-            Conj => f.write_char('&'),
-            Disj => f.write_char('|'),
-            Impl => f.write_str("->"),
-        }
-    }
-}
-
-impl Display for Expr
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Expr::*;
-
-        match self {
-            Pred(name) => name.fmt(f),
-            UnOp(op, sub) => f.write_fmt(format_args!("({}{})", op, sub)),
-            BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
-            Eq(l, r) => f.write_fmt(format_args!("({} = {})", l, r)),
-        }
-    }
-}
-
-impl OperNode for Expr
-{
-    type UnOp = UnOper;
-
-    type BiOp = BinOper;
-
-    fn un_op(op: UnOper, sub: Rc<Self>) -> Self {
-        Expr::UnOp(op, sub)
+        let mut bound = HashSet::new();
+        Expr::dfs(&node)
+            .filter_map(move |(curr, dir)| {
+                match &**curr {
+                    Expr::UnOp(UnOper::Any(var) | UnOper::Ext(var), ..) => {
+                        if let DfsDir::In = dir {
+                            bound.insert(var);
+                        } else {
+                            bound.remove(&var);
+                        }
+                        None
+                    },
+                    Expr::Eq(l, r) => {
+                        Some(term_into_vars(l).chain(term_into_vars(r)))
+                    },
+                    _ => None,
+                }
+            })
+            .flatten()
     }
 
-    fn bin_op(op: BinOper, l: Rc<Self>, r: Rc<Self>) -> Self {
-        Expr::BiOp(op, l, r)
+    pub fn bound_variables(node: &ExprNode) -> HashSet<&TermVar>
+    {
+        Expr::dfs(node)
+            .filter_map(|(curr, _)| {
+                match &**curr {
+                    Expr::UnOp(UnOper::Any(var) | UnOper::Ext(var), ..) => Some(var),
+                    _ => None,
+                }
+            })
+            .collect()
     }
 }
 
@@ -170,6 +164,21 @@ impl Tree for Expr
     }
 }
 
+impl OperNode for Expr
+{
+    type UnOp = UnOper;
+
+    type BiOp = BinOper;
+
+    fn un_op(op: UnOper, sub: Rc<Self>) -> Self {
+        Expr::UnOp(op, sub)
+    }
+
+    fn bin_op(op: BinOper, l: Rc<Self>, r: Rc<Self>) -> Self {
+        Expr::BiOp(op, l, r)
+    }
+}
+
 pub struct ExprProvider
 {
     saved: RefCell<HashSet<ExprNode>>,
@@ -234,5 +243,46 @@ impl ExprProvider
     pub fn repl(&self, name: &str) -> ExprNode
     {
         self.get_or_insert(Expr::Pred(ExprPred::Dynamic(String::from(name))))
+    }
+}
+
+
+impl Display for UnOper
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use UnOper::*;
+
+        match self {
+            Neg => f.write_char('!'),
+            Any(var) => f.write_fmt(format_args!("@{}.", var)),
+            Ext(var) => f.write_fmt(format_args!("?{}.", var)),
+        }
+    }
+}
+
+impl Display for BinOper
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use BinOper::*;
+
+        match self {
+            Conj => f.write_char('&'),
+            Disj => f.write_char('|'),
+            Impl => f.write_str("->"),
+        }
+    }
+}
+
+impl Display for Expr
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Expr::*;
+
+        match self {
+            Pred(name) => name.fmt(f),
+            UnOp(op, sub) => f.write_fmt(format_args!("({}{})", op, sub)),
+            BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
+            Eq(l, r) => f.write_fmt(format_args!("({} = {})", l, r)),
+        }
     }
 }

@@ -16,6 +16,19 @@ impl VarType for TermVarType
 pub type TermVar = Variable<TermVarType>;
 
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnOper
+{
+    Next
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BinOper
+{
+    Add,
+    Mul,
+}
+
 #[derive(Debug, Clone, Eq)]
 pub enum Term
 {
@@ -27,61 +40,6 @@ pub enum Term
 
 pub type TermNode = Rc<Term>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BinOper
-{
-    Add,
-    Mul,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UnOper
-{
-    Next
-}
-
-impl Display for Term
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Term::*;
-
-        match self {
-            Var(var) => var.fmt(f),
-            Zero => f.write_char('0'),
-            UnOp(UnOper::Next, sub) => f.write_char('(')
-                .and_then(|()| sub.fmt(f))
-                .and_then(|()| f.write_str("')")),
-            BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
-        }
-    }
-}
-
-impl Display for BinOper
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use BinOper::*;
-
-        match self {
-            Add => f.write_char('+'),
-            Mul => f.write_char('*')
-        }
-    }
-}
-
-impl OperNode for Term
-{
-    type UnOp = UnOper;
-
-    type BiOp = BinOper;
-
-    fn un_op(op: UnOper, sub: std::rc::Rc<Self>) -> Self {
-        Self::UnOp(op, sub)
-    }
-
-    fn bin_op(op: BinOper, l: std::rc::Rc<Self>, r: std::rc::Rc<Self>) -> Self {
-        Self::BiOp(op, l, r)
-    }
-}
 
 impl Hash for Term
 {
@@ -146,6 +104,22 @@ impl Tree for Term
     }
 }
 
+impl OperNode for Term
+{
+    type UnOp = UnOper;
+
+    type BiOp = BinOper;
+
+    fn un_op(op: UnOper, sub: std::rc::Rc<Self>) -> Self {
+        Self::UnOp(op, sub)
+    }
+
+    fn bin_op(op: BinOper, l: std::rc::Rc<Self>, r: std::rc::Rc<Self>) -> Self {
+        Self::BiOp(op, l, r)
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub struct TermProvider
 {
@@ -196,5 +170,33 @@ impl TermProvider
     pub fn repl(&self, name: &str) -> TermNode
     {
         self.get_or_insert(Term::Var(TermVar::Dynamic(String::from(name))))
+    }
+}
+
+impl Display for Term
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Term::*;
+
+        match self {
+            Var(var) => var.fmt(f),
+            Zero => f.write_char('0'),
+            UnOp(UnOper::Next, sub) => f.write_char('(')
+                .and_then(|()| sub.fmt(f))
+                .and_then(|()| f.write_str("')")),
+            BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
+        }
+    }
+}
+
+impl Display for BinOper
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use BinOper::*;
+
+        match self {
+            Add => f.write_char('+'),
+            Mul => f.write_char('*')
+        }
     }
 }

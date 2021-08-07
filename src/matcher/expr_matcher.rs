@@ -1,6 +1,8 @@
-use std::{collections::{HashMap}, fmt::Display, rc::Rc};
+use std::{collections::{HashMap}, fmt::Display, hash::Hash, rc::Rc};
 
 use crate::{ast::{Expr, ExprNode, ExprPred, ExprUnOp, Term, TermNode, TermVar, term::{TermProvider}}};
+
+use super::helpers::SubstContainer;
 
 #[derive(Debug, Clone)]
 pub struct Matcher<'a>
@@ -35,7 +37,7 @@ impl<'a> Matcher<'a>
 
         match (&**expected, &**checked) {
             (Pred(ExprPred::Dynamic(dyn_name)), _) => {
-                match Self::check_substitution(dyn_name.clone(), checked, expr_substs) {
+                match Self::check_substitution(dyn_name, checked, expr_substs) {
                     Ok(()) => Ok(()),
                     Err((expected, actual)) => Err(Mismatch::Expr{ expected, actual }),
                 }
@@ -43,14 +45,14 @@ impl<'a> Matcher<'a>
             (UnOp(ExprUnOp::Any(TermVar::Dynamic(dyn_name)), l_sub),
              UnOp(ExprUnOp::Any(TermVar::Static(st_name, ..)), r_sub)) => {
 
-                match Self::check_substitution(dyn_name.clone(), &self.term_provider.var(*st_name), term_substs) {
+                match Self::check_substitution(dyn_name, &self.term_provider.var(*st_name), term_substs) {
                     Ok(()) => self.match_exprs(l_sub, r_sub, expr_substs, term_substs),
                     Err((expected, actual)) => Err(Mismatch::Term{ expected, actual })
                 }
             },
             (UnOp(ExprUnOp::Ext(TermVar::Dynamic(dyn_name)), l_sub),
              UnOp(ExprUnOp::Ext(TermVar::Static(st_name, ..)), r_sub)) => {
-                match Self::check_substitution(dyn_name.clone(), &self.term_provider.var(*st_name), term_substs) {
+                match Self::check_substitution(dyn_name, &self.term_provider.var(*st_name), term_substs) {
                     Ok(()) => self.match_exprs(l_sub, r_sub, expr_substs, term_substs),
                     Err((expected, actual)) => Err(Mismatch::Term{ expected, actual })
                 }
@@ -81,7 +83,7 @@ impl<'a> Matcher<'a>
 
         match (&**expected, &**checked) {
             (Var(TermVar::Dynamic(l_dyn)), _) => {
-                Self::check_substitution(l_dyn.clone(), checked, term_substs)
+                Self::check_substitution(l_dyn, checked, term_substs)
             }
             (Var(TermVar::Static(l, ..)), Var(TermVar::Static(r, ..))) if l == r => Ok(()),
             (UnOp(l_op, l_sub), UnOp(r_op, r_sub)) if l_op == r_op => {
@@ -96,18 +98,10 @@ impl<'a> Matcher<'a>
         }
     }
 
-    fn check_substitution<Type>(name: String, checked: &Rc<Type>, substs: &mut HashMap<String, Rc<Type>>) -> Result<(), (Rc<Type>, Rc<Type>)>
+    fn check_substitution<Type, Key: Clone + Hash + Eq>(name: &Key, checked: &Rc<Type>, substs: &mut HashMap<Key, Rc<Type>>) -> Result<(), (Rc<Type>, Rc<Type>)>
     {
-        if let Some(subst) = substs.get(&name) {
-            if Rc::ptr_eq(subst, checked) {
-                Ok(())
-            } else {
-                Err((Rc::clone(subst), Rc::clone(checked)))
-            }
-        } else {
-            substs.insert(name, Rc::clone(checked));
-            Ok(())
-        }
+        substs.check_substitution(name, checked)
+            .map_err(|expected| (Rc::clone(expected), Rc::clone(checked)))
     }
 }
 
@@ -151,6 +145,36 @@ pub enum Mismatch
 }
 
 pub type MatchResult = Result<Substitutions, Mismatch>;
+
+struct FreeVarSubst
+{
+    name: char,
+    subst: Option<TermNode>,
+}
+
+impl FreeVarSubst
+{
+    fn new(name: char) -> Option<Self>
+    {
+        Some(Self{ name, subst: None })
+    }
+}
+
+impl SubstContainer<char, Term> for FreeVarSubst
+{
+    fn get_subst(&self, key: &char) -> Option<&'_ Rc<Term>> {
+        if *key == self.name {
+            if let Some(subst) = &self.subst {
+                return Some(subst)
+            }
+        }
+        None
+    }
+
+    fn substitute(&mut self, key: &char, subst: Rc<Term>) {
+        self.subst = Some(subst)
+    }
+}
 
 impl<'a> Display for Matcher<'a>
 {
