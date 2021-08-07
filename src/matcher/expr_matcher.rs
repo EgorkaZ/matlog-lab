@@ -101,7 +101,7 @@ impl<'a> Matcher<'a>
     fn check_substitution<Type, Key: Clone + Hash + Eq>(name: &Key, checked: &Rc<Type>, substs: &mut HashMap<Key, Rc<Type>>) -> Result<(), (Rc<Type>, Rc<Type>)>
     {
         substs.check_substitution(name, checked)
-            .map_err(|expected| (Rc::clone(expected), Rc::clone(checked)))
+            .map_err(|expected| (expected, Rc::clone(checked)))
     }
 }
 
@@ -172,7 +172,9 @@ impl SubstContainer<char, Term> for FreeVarSubst
     }
 
     fn substitute(&mut self, key: &char, subst: Rc<Term>) {
-        self.subst = Some(subst)
+        if *key == self.name {
+            self.subst = Some(subst);
+        }
     }
 }
 

@@ -5,17 +5,20 @@ pub trait SubstContainer<Key: Clone, Type>
     fn get_subst(&self, key: &Key) -> Option<&'_ Rc<Type>>;
     fn substitute(&mut self, key: &Key, subst: Rc<Type>);
 
-    fn check_substitution(&mut self, key: &Key, subst: &Rc<Type>) -> Result<(), &'_ Rc<Type>>
+    fn check_substitution(&mut self, key: &Key, subst: &Rc<Type>) -> Result<(), Rc<Type>>
     {
-        if let Some(found) = self.get_subst(&key) {
-            if Rc::ptr_eq(&subst, &found) {
+        match self.get_subst(&key) {
+            Some(found) => {
+                if Rc::ptr_eq(subst, found) {
+                    Ok(())
+                } else {
+                    Err(Rc::clone(found))
+                }
+            },
+            None => {
+                self.substitute(key, Rc::clone(subst));
                 Ok(())
-            } else {
-                Err(found)
             }
-        } else {
-            self.substitute(key, Rc::clone(subst));
-            Ok(())
         }
     }
 }
