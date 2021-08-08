@@ -4,6 +4,10 @@ use std::marker::PhantomData;
 
 grammar(term_provider: &TermProvider, expr_provider: &ExprProvider);
 
+pub Proved = {
+    "|-" <Impl> EOL?,
+};
+
 pub Expr = {
     <Impl> EOL?,
 };

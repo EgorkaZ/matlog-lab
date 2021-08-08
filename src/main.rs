@@ -5,39 +5,48 @@ pub mod ast;
 pub mod parser;
 pub mod matcher;
 pub mod tree;
+pub mod proof_check;
 
 
-use std::rc::Rc;
+use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Read}, rc::Rc};
+
+use proof_check::Proof;
 
 use crate::{ast::{Expr, ExprNode}, matcher::{GetSubsts}, parser::ExprManager};
 
-fn main() {
+fn consume_reader<R: Read>(mut reader: BufReader<R>) -> (String, Vec<String>)
+{
+    let mut to_prove = String::new();
+    reader.read_line(&mut to_prove).unwrap();
+    to_prove += "$";
+
+    let proof = reader.lines()
+        .map(|line| line.unwrap() + "$")
+        .collect();
+
+    (to_prove, proof)
+}
+
+fn read_all() -> (String, Vec<String>)
+{
+    let mut args_iter = args();
+    args_iter.next();
+    if let Some(file_name) = args_iter.next() {
+        consume_reader(BufReader::new(File::open(&file_name).unwrap()))
+    } else {
+        consume_reader(BufReader::new(io::stdin()))
+    }
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
     let manager = ExprManager::new();
-    let parsed = manager.parse("a=a -> b=b -> a=a $");
+    let (to_prove, proof) = read_all();
 
-    println!("I parsed: {}", parsed);
-    println!("Here's debug version: {:?}", parsed);
+    let to_prove = manager.parse_proved(&to_prove);
+    let proof = proof.into_iter()
+        .map(|as_str| manager.parse(&as_str))
+        .collect();
 
-    let matcher_expr = manager.parse("a:Pred -> b:Pred -> a:Pred $");
-    println!("Matcher: {}", matcher_expr);
-    println!("Debug matcher: {:?}", matcher_expr);
-
-    let matcher = manager.matcher_node(matcher_expr);
-    let match_res = match matcher.match_expression(&parsed) {
-        Ok(substs) => substs.all_substs(|_, subst: &ExprNode| matches!(&**subst, Expr::Eq(..))),
-        Err(_) => false,
-    };
-    println!("Match result: {}", match_res);
-
-    let scheme_matcher = manager.matcher_str("subst:Pred -> ?x:Var.orig:Pred $");
-    let match_res = scheme_matcher
-        .match_expression(&manager.parse("a + b = 0 -> ?c.c = 0 $")).unwrap();
-
-    let var_name = match_res.get_substs().iter().next().unwrap().1;
-    let pred_substs = match_res.get_substs();
-
-    let orig_matcher = manager.matcher_node(Rc::clone(pred_substs.get("orig").unwrap()));
-    let result = orig_matcher.match_expr_free_var_subst(pred_substs.get("subst").unwrap(), *var_name).unwrap();
-
-    println!("Scheme match res: {:?}", result);
+    let proof = Proof::new(to_prove, proof);
+    Ok(())
 }
