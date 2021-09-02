@@ -8,20 +8,19 @@ pub mod tree;
 pub mod proof_check;
 
 
-use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Read}, rc::Rc};
+use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Read}};
 
-use proof_check::Proof;
+use proof_check::{Proof, ProofChecker};
 
-use crate::{ast::{Expr, ExprNode}, matcher::{GetSubsts}, parser::ExprManager};
+use crate::{parser::ExprManager};
 
 fn consume_reader<R: Read>(mut reader: BufReader<R>) -> (String, Vec<String>)
 {
     let mut to_prove = String::new();
     reader.read_line(&mut to_prove).unwrap();
-    to_prove += "$";
 
     let proof = reader.lines()
-        .map(|line| line.unwrap() + "$")
+        .map(|line| line.unwrap())
         .collect();
 
     (to_prove, proof)
@@ -48,5 +47,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect();
 
     let proof = Proof::new(to_prove, proof);
+    let proof_checker = ProofChecker::new(&manager);
+    proof_checker.check_proof(&proof)
+        .into_iter()
+        .zip(proof.proof.iter())
+        .for_each(|(mb_base, expr)| match mb_base {
+            Ok(base) => println!("{} [{:?}]", expr, base),
+            Err(_) => println!("{} [Wrong]", expr),
+        });
     Ok(())
 }

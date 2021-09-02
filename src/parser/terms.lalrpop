@@ -5,16 +5,12 @@ use std::marker::PhantomData;
 grammar(term_provider: &TermProvider, expr_provider: &ExprProvider);
 
 pub Proved = {
-    "|-" <Impl> EOL?,
+    "|-" <Expr>,
 };
 
 pub Expr = {
-    <Impl> EOL?,
+    <Impl>,
 };
-
-EOL: () = {
-    "$" => (),
-}
 
 Impl = {
     Disj,
@@ -36,11 +32,8 @@ Unary = {
     "(" <Impl> ")",
     "!" <Unary> => expr_provider.neg(&<>),
 
-    <v:Any> <e:Impl> EOL => expr_provider.any(v, &e),
-    <v:Exists> <e:Impl> EOL => expr_provider.ext(v, &e),
-
-    "(" <v:Any> <e:Impl> ")" => expr_provider.any(v, &e),
-    "(" <v:Exists> <e:Impl> ")" => expr_provider.ext(v, &e),
+    <v:Any> <e:Impl> "$" => expr_provider.any(v, &e),
+    <v:Exists> <e:Impl> "$" => expr_provider.ext(v, &e),
 };
 
 Any = {

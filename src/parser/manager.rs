@@ -1,6 +1,6 @@
 use crate::{ast::{ExprNode, ExprProvider, TermProvider}, matcher::Matcher};
 
-use super::terms::{ExprParser, ProvedParser};
+use super::{preprocess, terms::{ExprParser, ProvedParser}};
 
 pub struct ExprManager
 {
@@ -25,12 +25,12 @@ impl ExprManager
 
     pub fn parse(&self, str: &str) -> ExprNode
     {
-        self.parser.parse(&self.term_provider, &self.expr_provider, str).unwrap()
+        self.parser.parse(&self.term_provider, &self.expr_provider, &preprocess(str.chars())).unwrap()
     }
 
     pub fn parse_proved(&self, str: &str) -> ExprNode
     {
-        ProvedParser::new().parse(&self.term_provider, &self.expr_provider, str).unwrap()
+        ProvedParser::new().parse(&self.term_provider, &self.expr_provider, &preprocess(str.chars())).unwrap()
     }
 
     pub fn matcher_str(&self, matcher: &str) -> Matcher<'_>
