@@ -28,7 +28,19 @@ impl<'a> Matcher<'a>
         VarSubstResult{ match_result: self.run_matching(checked, VarSubst::new(var_name))}
     }
 
-    pub fn all_free_vars(checked: &TermNode) -> BTreeSet<char>
+    pub fn all_free_vars(checked: &ExprNode) -> BTreeSet<char>
+    {
+        let mut res = BTreeSet::new();
+        Self::for_each_term_vars(checked, |curr_bound, term_vars| {
+            let mut curr_free = term_vars.into_iter()
+                .filter(|var| !curr_bound.contains(var))
+                .collect();
+            res.append(&mut curr_free);
+        });
+        res
+    }
+
+    pub fn all_vars(checked: &TermNode) -> BTreeSet<char>
     {
         let mut free = BTreeSet::new();
         Self::all_vars_of_term(checked, &mut free);
@@ -38,11 +50,15 @@ impl<'a> Matcher<'a>
 
     pub fn all_bound_at_var_mention(checked: &ExprNode, var: char) -> BTreeSet<char>
     {
-        let mut bound_at_moment = mset::MultiSet::new();
         let mut res = BTreeSet::new();
-        Self::bound_at_var_mention(checked, var, &mut bound_at_moment, &mut res);
-
-        assert!(bound_at_moment.is_empty(), "All bound vars should be unbound on exit. Actual: {:?}", bound_at_moment);
+        Self::for_each_term_vars(checked, |curr_bound, term_vars| {
+            if term_vars.contains(&var) && !curr_bound.contains(&var) {
+                res.extend(
+                    curr_bound.iter()
+                        .map(|(name, _)| *name)
+                );
+            }
+        });
         res
     }
 
@@ -144,7 +160,18 @@ impl<'a> Matcher<'a>
             .map_err(|expected| Mismatch::from((expected, checked.clone())))
     }
 
-    fn bound_at_var_mention(curr: &ExprNode, var: char, curr_bound: &mut mset::MultiSet<char>, res: &mut BTreeSet<char>)
+
+    fn for_each_term_vars<Callback>(root: &ExprNode, mut callback: Callback)
+        where Callback: FnMut(&mset::MultiSet<char>, BTreeSet<char>)
+    {
+        let mut bound_at_moment= mset::MultiSet::new();
+        Self::for_each_term_vars_rec(root, &mut bound_at_moment, &mut callback);
+
+        assert!(bound_at_moment.is_empty(), "All bound vars should be unbound on exit. Actual: {:?}", bound_at_moment);
+    }
+
+    fn for_each_term_vars_rec<Callback>(curr: &ExprNode, curr_bound: &mut mset::MultiSet<char>, callback: &mut Callback)
+        where Callback: FnMut(&mset::MultiSet<char>, BTreeSet<char>)
     {
         use Expr::{UnOp, Eq};
         use ExprUnOp::{Any, Ext};
@@ -162,15 +189,10 @@ impl<'a> Matcher<'a>
             Self::all_vars_of_term(l, &mut vars_of_term);
             Self::all_vars_of_term(r, &mut vars_of_term);
 
-            if vars_of_term.contains(&var) {
-                res.extend(
-                    curr_bound.iter()
-                        .map(|(name, _)| *name)
-                );
-            }
+            callback(curr_bound, vars_of_term);
         } else {
             curr.children()
-                .for_each(|child| Self::bound_at_var_mention(child, var, curr_bound, res))
+                .for_each(|child| Self::for_each_term_vars_rec(child, curr_bound, callback))
         }
 
         mb_new_bound.map(|bound_var| curr_bound.remove(&bound_var));

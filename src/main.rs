@@ -51,11 +51,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         .chain(proof)
         .enumerate()
         .for_each(|(idx, BaseExpr{expr, proof})| {
-            print!("{}: ", idx);
-            match &proof {
-                Ok(base) => println!("{} [{:?}]", expr, base),
-                Err(_) => println!("{} [Wrong]", expr),
-            };
+            if idx == 0 {
+                print!("|-");
+            } else {
+                print!("{}: ", idx);
+            }
+            print!("{} ", expr);
+            if idx != 0 {
+                match &proof {
+                    Ok(base) => println!("[{:?}]", base),
+                    Err(_) => println!("[Wrong]"),
+                };
+            } else {
+                println!();
+            }
         });
 
     // let proof = Proof::new(manager.parse_proved(&to_prove), some_proved);

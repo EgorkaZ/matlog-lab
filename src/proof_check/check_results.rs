@@ -1,17 +1,26 @@
 use crate::ast::{TermNode, ExprNode};
 
 #[derive(Debug, Clone, Copy)]
+pub enum QuanRule
+{
+    Exist,
+    Any,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum Based
 {
     Scheme(u8),
     Axiom(u8),
     MP{ from: usize, imp: usize },
+    Rule{ orig: usize, rule: QuanRule},
 }
 
 #[derive(Debug, Clone)]
 pub enum Cringe
 {
-    NonFreeToSubst{ var: char, substed: TermNode, rule: char },
+    FreeVarInRule{ var: char, rule: QuanRule },
+    NonFreeToSubst{ var: char, substed: TermNode, rule: QuanRule },
     Unproved,
 }
 

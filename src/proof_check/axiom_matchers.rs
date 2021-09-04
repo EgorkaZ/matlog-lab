@@ -5,7 +5,7 @@ use crate::{
     matcher::{Matcher, Mismatch, Substitutions, helpers::{SubstContainer}},
     parser::ExprManager};
 
-use super::{BaseExpr, Based, Cringe, Proof};
+use super::{BaseExpr, Based, Cringe, Proof, QuanRule};
 
 
 
@@ -107,17 +107,20 @@ impl<'a> ProofChecker<'a>
             .map(|(idx, matcher)| {
                 matcher.match_expression(checked)
                     .and_then(|substs| {
+                        // println!("managed to match! Checked: {}", checked);
                         let quan_var = substs.var_mapping().get_subst(&"x".into()).unwrap();
 
                         let expr_substs = substs.expr_substs();
                         let orig = expr_substs.get_subst(&"orig".into()).unwrap();
                         let substed = expr_substs.get_subst(&"substed".into()).unwrap();
 
+                        // println!("quan_var: {}, orig: {}, substed: {}", quan_var, orig, substed);
+
                         let orig_matcher = self.manager.matcher_node(Rc::clone(orig));
 
                         let check_freedom_for_subst = |substs: Substitutions| {
                             let substed_term = substs.var_subst().get_subst(quan_var).unwrap();
-                            let free_vars = Matcher::all_free_vars(substed_term);
+                            let free_vars = Matcher::all_vars(substed_term);
                             if !(Matcher::all_bound_at_var_mention(orig, *quan_var).bitand(&free_vars)).is_empty() {
                                 Err(Mismatch::NonFreeToSubst{ var: *quan_var, substed: Rc::clone(substed_term) })
                             } else {
@@ -127,13 +130,14 @@ impl<'a> ProofChecker<'a>
 
                         orig_matcher.match_expr_free_var_subst(substed, *quan_var)
                             .validate(|match_res| {
+                                // println!("matched in orig! Res: {:?}", match_res);
                                 match_res.and_then(check_freedom_for_subst)
                             })
                     })
                     .map(|_| Based::Scheme(11 + idx as u8))
                     .map_err(|mismatch| {
                         if let Mismatch::NonFreeToSubst{var, substed} = mismatch {
-                            let rule = if idx == 0 { '@' } else { '?' };
+                            let rule = if idx == 0 { QuanRule::Any } else { QuanRule::Exist };
                             Cringe::NonFreeToSubst{var, substed, rule}
                         } else {
                             Cringe::casual_cringe()
