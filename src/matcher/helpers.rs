@@ -10,7 +10,7 @@ pub trait SubstContainer<Key, Substituted>
     fn check_substitution<Cmp>(&mut self, key: &Key, subst: &Substituted, eq: Cmp) -> Result<(), Substituted>
         where Cmp: FnOnce(&Substituted, &Substituted) -> bool
     {
-        match self.get_subst(&key) {
+        match self.get_subst(key) {
             Some(found) => {
                 if eq(subst, found) {
                     Ok(())

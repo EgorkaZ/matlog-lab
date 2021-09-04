@@ -25,7 +25,8 @@ impl ExprManager
 
     pub fn parse(&self, str: &str) -> ExprNode
     {
-        self.parser.parse(&self.term_provider, &self.expr_provider, &preprocess(str.chars())).unwrap()
+        self.parser.parse(&self.term_provider, &self.expr_provider, &preprocess(str.chars()))
+            .expect(&format!("I tried to parse: '{}' and failed. I'm so sorry", str))
     }
 
     pub fn parse_proved(&self, str: &str) -> ExprNode

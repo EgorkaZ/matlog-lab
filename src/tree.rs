@@ -64,7 +64,7 @@ impl<'a, T> Iterator for DfsIterator<'a, T>
     type Item = (&'a T::Child, DfsDir);
 
     fn next(&mut self) -> Option<Self::Item> {
-        // parent_stack either has 1 more element than cheldren_stack or has same count of elements
+        // parent_stack either has 1 more element than children_stack or has same count of elements
         //     in first case we've just come in the node, return it as 'In' and add it's children to children_stack
         //     in second case we're processing current parent's children: push a child as new parent, go to first case
         //     if current children are all processed, return current parent as 'Out', delete from stack

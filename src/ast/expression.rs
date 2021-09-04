@@ -281,8 +281,8 @@ impl Display for Expr
         match self {
             Pred(name) => name.fmt(f),
             UnOp(op, sub) => f.write_fmt(format_args!("({}{})", op, sub)),
-            BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
-            Eq(l, r) => f.write_fmt(format_args!("({} = {})", l, r)),
+            BiOp(op, l, r) => f.write_fmt(format_args!("({}{}{})", l, op, r)),
+            Eq(l, r) => f.write_fmt(format_args!("({}={})", l, r)),
         }
     }
 }
