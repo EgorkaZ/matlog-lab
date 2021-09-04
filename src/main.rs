@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut reader = get_reader();
 
     let mut to_prove = String::new();
-    reader.read_line(&mut to_prove);
+    reader.read_line(&mut to_prove).expect("I wanted to read this line so hard...");
     let to_prove = manager.parse_proved(&to_prove);
 
     let proof = reader.lines()

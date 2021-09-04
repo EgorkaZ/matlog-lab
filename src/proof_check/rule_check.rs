@@ -37,7 +37,7 @@ fn check_modus_ponens(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based
         })
 }
 
-fn check_quan_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Cringe>
+fn check_quan_rules(_checked: &ExprNode, _previous: &[BaseExpr]) -> Result<Based, Cringe>
 {
     // todo!();
     Err(Cringe::casual_cringe())

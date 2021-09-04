@@ -1,4 +1,4 @@
-use std::{collections::{BTreeSet, HashMap}, fmt::Display, hash::Hash, ops::BitAnd, rc::Rc};
+use std::{collections::{BTreeSet, HashMap}, fmt::Display, hash::Hash, rc::Rc};
 
 use crate::{ast::{Expr, ExprNode, ExprPred, ExprUnOp, Term, TermNode, TermVar, term::{TermProvider}}, tree::Tree};
 

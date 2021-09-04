@@ -31,7 +31,7 @@ pub struct BaseExpr
     pub proof: Result<Based, Cringe>,
 }
 
-
+#[allow(unused)]
 pub struct Proof
 {
     to_prove: ExprNode,

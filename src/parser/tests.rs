@@ -5,7 +5,7 @@ use lalrpop_util::lexer::Token;
 
 use crate::ast::{ExprNode, ExprProvider, TermNode, TermProvider};
 
-use super::{ExprManager, preprocess};
+use super::{preprocess};
 use super::terms::{TermParser, ExprParser};
 
 struct ParserTester
@@ -17,6 +17,7 @@ struct ParserTester
     expr_parser: ExprParser,
 }
 
+#[allow(unused)]
 impl ParserTester
 {
     fn new() -> Self
@@ -177,6 +178,7 @@ fn parse_folded_quantors()
 
     tester.assert_parse_res(&[
         ("(?y.x=y)", xist_y),
-        ("?x.?y.x=y", xist_x)
+        ("?x.?y.x=y", xist_x),
+        ("A & B -> (?x.?y. x = y) -> A&B", scheme),
     ]);
 }
