@@ -10,7 +10,7 @@ pub mod proof_check;
 
 use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Write}};
 
-use proof_check::{Cringe, ProofChecker};
+use proof_check::{Wrong, ProofChecker};
 
 use crate::{parser::ExprManager, proof_check::{BaseExpr, check_rules}};
 
@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         write!(out_lock, "{}", to_prove).unwrap();
         let last = line_proofs.pop();
-        let first_cringe = {
+        let first_wrong = {
             line_proofs[..line_proofs.len() - 1].iter()
                 .enumerate()
                 .find_map(|(num, BaseExpr{expr, proof})| {
@@ -65,29 +65,29 @@ fn main() -> Result<(), Box<dyn Error>> {
                             writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap();
                             None
                         },
-                        Err(cringe) => {
-                            Some((num, cringe))
+                        Err(error) => {
+                            Some((num, error))
                         }
                     }
                 })
         };
 
-        let mut print_cringe = |num, cringe| {
+        let mut print_error = |num, error| {
             write!(out_lock, "Expression {}", num).unwrap();
-            if !matches!(cringe, &Cringe::Unproved) {
+            if !matches!(error, &Wrong::Unproved) {
                 write!(out_lock, ":").unwrap();
             }
-            writeln!(out_lock, " {}.", cringe).unwrap();
+            writeln!(out_lock, " {}.", error).unwrap();
         };
 
-        if let Some((num, cringe)) = first_cringe {
-            print_cringe(num, cringe);
+        if let Some((num, error)) = first_wrong {
+            print_error(num, error);
         } else {
             if let Some(BaseExpr{ expr, proof }) = last {
                 let num = line_proofs.len() + 1;
                 match proof {
                     Ok(base) if proved == expr => writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap(),
-                    Err(cringe) => print_cringe(num, &cringe),
+                    Err(error) => print_error(num, &error),
                     _ => writeln!(out_lock, "The proof proves different expression.").unwrap(),
                 }
             } else {

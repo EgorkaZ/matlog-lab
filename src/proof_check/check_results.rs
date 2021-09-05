@@ -43,7 +43,7 @@ impl Display for Based
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Cringe
+pub enum Wrong
 {
     FreeVarInRule{ var: char, rule: QuanRule },
     NonFreeToSubst{ var: char, substed: TermNode, rule: QuanRule },
@@ -51,16 +51,11 @@ pub enum Cringe
 }
 
 // TODO I beg you, rename it before you send
-impl Cringe /*i.e. not based*/
+impl Wrong /*i.e. not based*/
 {
-    pub fn casual_cringe() -> Self
-    {
-        Self::Unproved
-    }
-
     pub fn get_priority(&self) -> u8
     {
-        use Cringe::*;
+        use Wrong::*;
 
         match self {
             FreeVarInRule{ rule: QuanRule::Exist, .. } => 0,
@@ -81,7 +76,7 @@ impl Cringe /*i.e. not based*/
     }
 }
 
-impl Ord for Cringe
+impl Ord for Wrong
 {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.get_priority().cmp(&other.get_priority()) {
@@ -97,14 +92,14 @@ impl Ord for Cringe
     }
 }
 
-impl PartialOrd for Cringe
+impl PartialOrd for Wrong
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Display for Cringe
+impl Display for Wrong
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -121,7 +116,7 @@ impl Display for Cringe
 pub struct BaseExpr
 {
     pub expr: ExprNode,
-    pub proof: Result<Based, Cringe>,
+    pub proof: Result<Based, Wrong>,
 }
 
 #[allow(unused)]
@@ -149,7 +144,7 @@ mod tests {
 
     #[test]
     fn errors_order() {
-        use Cringe::*;
+        use Wrong::*;
         use QuanRule::*;
 
         let some_term = Rc::new(Term::Zero);

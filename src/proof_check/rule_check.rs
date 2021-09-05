@@ -4,15 +4,15 @@ use rustc_hash::FxHashMap;
 
 use crate::{ast::{Expr, ExprBinOp, ExprNode, ExprUnOp, TermVar}, matcher::Matcher, proof_check::QuanRule};
 
-use super::{BaseExpr, Based, Cringe};
+use super::{BaseExpr, Based, Wrong};
 
-pub fn check_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Cringe>
+pub fn check_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Wrong>
 {
     check_modus_ponens(checked, previous)
         .or_else(|mp_err| check_quan_rules(checked, previous).map_err(|quan_err| quan_err.min(mp_err)))
 }
 
-fn check_modus_ponens(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Cringe>
+fn check_modus_ponens(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Wrong>
 {
     let possible_from: FxHashMap<_, _> = previous.iter()
         .map(|BaseExpr{ expr, .. }| expr)
@@ -45,12 +45,12 @@ fn check_modus_ponens(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based
             possible_from.get(expr).map(|impl_idx| (from_idx, *impl_idx))
         })
         .min()
-        .map_or(Err(Cringe::casual_cringe()), |(from_idx, impl_idx)| {
+        .map_or(Err(Wrong::Unproved), |(from_idx, impl_idx)| {
             Ok(Based::MP { from: from_idx + 1, imp: impl_idx + 1 })
         })
 }
 
-fn check_quan_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Cringe>
+fn check_quan_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Wrong>
 {
     use Expr::BiOp;
     use ExprBinOp::Impl;
@@ -69,13 +69,13 @@ fn check_quan_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, 
             .or_else(|exist_err| check_any_rule((from, to), implications)
                 .map_err(|any_err| any_err.min(exist_err)))
     } else {
-        Err(Cringe::casual_cringe())
+        Err(Wrong::Unproved)
     }
 }
 
 fn check_exist_rule<'a>(
     (from, to): (&ExprNode, &ExprNode),
-    impls_it: impl Iterator<Item = (usize, &'a ExprNode, &'a ExprNode)>) -> Result<Based, Cringe>
+    impls_it: impl Iterator<Item = (usize, &'a ExprNode, &'a ExprNode)>) -> Result<Based, Wrong>
 {
     let candidates_it = impls_it
         .filter_map(|(idx, found_from, found_to)| {
@@ -97,7 +97,7 @@ fn check_exist_rule<'a>(
 
 fn check_any_rule<'a>(
     (from, to): (&ExprNode, &ExprNode),
-    impls_it: impl Iterator<Item = (usize, &'a ExprNode, &'a ExprNode)>) -> Result<Based, Cringe>
+    impls_it: impl Iterator<Item = (usize, &'a ExprNode, &'a ExprNode)>) -> Result<Based, Wrong>
 {
     let candidates_it = impls_it
         .filter_map(|(idx, found_from, found_to)| {
@@ -120,17 +120,17 @@ fn check_any_rule<'a>(
 fn check_rule_detail(
     non_quan: &ExprNode,
     rule: QuanRule,
-    candidates_it: impl Iterator<Item = (usize, char)>) -> Result<Based, Cringe>
+    candidates_it: impl Iterator<Item = (usize, char)>) -> Result<Based, Wrong>
 {
     let mut cached_free_vars = None;
     candidates_it
-        .fold(Err(Cringe::casual_cringe()), |res, (idx, var)| {
+        .fold(Err(Wrong::Unproved), |res, (idx, var)| {
             let free_vars = cached_free_vars.get_or_insert_with(|| Matcher::all_free_vars(non_quan));
             res.or_else(|prev_err| {
                 if !free_vars.contains(&var) {
                     Ok(Based::Rule{ orig: idx + 1, rule })
                 } else {
-                    Err(prev_err.min(Cringe::FreeVarInRule{ var, rule: QuanRule::Exist }))
+                    Err(prev_err.min(Wrong::FreeVarInRule{ var, rule: QuanRule::Exist }))
                 }
             })
         })

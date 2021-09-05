@@ -5,7 +5,7 @@ use crate::{
     matcher::{Matcher, Substitutions, helpers::{SubstContainer}},
     parser::ExprManager};
 
-use super::{BaseExpr, Based, Cringe, QuanRule};
+use super::{BaseExpr, Based, Wrong, QuanRule};
 
 
 
@@ -65,7 +65,7 @@ impl<'a> ProofChecker<'a>
 
 // proof checking
 
-    fn match_schemes(&self, checked: &ExprNode) -> Result<Based, Cringe>
+    fn match_schemes(&self, checked: &ExprNode) -> Result<Based, Wrong>
     {
         match self.match_basic(checked, &self.schemes[..10]) {
             Some(num) => Ok(Based::Scheme(num)),
@@ -73,7 +73,7 @@ impl<'a> ProofChecker<'a>
         }
     }
 
-    fn match_axioms(&self, checked: &ExprNode) -> Result<Based, Cringe>
+    fn match_axioms(&self, checked: &ExprNode) -> Result<Based, Wrong>
     {
         match self.match_basic(checked, &self.axioms[..8]) {
             Some(num) => Ok(Based::Axiom(num)),
@@ -90,14 +90,14 @@ impl<'a> ProofChecker<'a>
         matched.map(|found| found as u8 + 1)
     }
 
-    fn match_quan_scheme(&self, checked: &ExprNode) -> Result<Based, Cringe>
+    fn match_quan_scheme(&self, checked: &ExprNode) -> Result<Based, Wrong>
     {
         // "(@x:Var.orig:Pred) -> substed:Pred",
         // "substed:Pred -> ?x:Var.orig:Pred"
         self.schemes[10..].iter().enumerate()
             .map(|(idx, matcher)| {
                 matcher.match_expression(checked)
-                    .map_err(|_mismatch| Cringe::casual_cringe())
+                    .map_err(|_mismatch| Wrong::Unproved)
                     .and_then(|substs| {
                         let quan_var = substs.var_mapping().get_subst(&"x".into()).unwrap();
 
@@ -112,7 +112,7 @@ impl<'a> ProofChecker<'a>
                             let free_vars = Matcher::all_vars(substed_term);
                             if !(Matcher::all_bound_at_var_mention(orig, *quan_var).bitand(&free_vars)).is_empty() {
                                 let rule = if idx == 0 { QuanRule::Any } else { QuanRule::Exist };
-                                Err(Cringe::NonFreeToSubst{ var: *quan_var, substed: Rc::clone(substed_term), rule })
+                                Err(Wrong::NonFreeToSubst{ var: *quan_var, substed: Rc::clone(substed_term), rule })
                             } else {
                                 Ok(Based::Scheme(11 + idx as u8))
                             }
@@ -121,22 +121,22 @@ impl<'a> ProofChecker<'a>
                         orig_matcher.match_expr_free_var_subst(substed, *quan_var)
                             .validate(|match_res| {
                                 match_res
-                                    .map_err(|_| Cringe::casual_cringe())
+                                    .map_err(|_| Wrong::Unproved)
                                     .and_then(check_freedom_for_subst)
                             })
                     })
             })
-            .fold(Err(Cringe::casual_cringe()), |res, match_res| {
+            .fold(Err(Wrong::Unproved), |res, match_res| {
                 match_res.or_else(|match_err| res.map_err(|prev_err| prev_err.min(match_err)))
             })
     }
 
-    fn match_quan_axiom(&self, checked: &ExprNode) -> Result<Based, Cringe>
+    fn match_quan_axiom(&self, checked: &ExprNode) -> Result<Based, Wrong>
     {
         // "(zeroed:Pred) & (@x:Var.orig:Pred -> (nexted:Pred)) -> orig:Pred"
         self.axioms[8]
             .match_expression(checked)
-            .map_err(|_| Cringe::casual_cringe())
+            .map_err(|_| Wrong::Unproved)
             .and_then(|substs| {
                 let quan_var = substs.var_mapping().get_subst(&"x".into()).unwrap();
 
@@ -169,10 +169,10 @@ impl<'a> ProofChecker<'a>
                 if zeroed && nexted {
                     Ok(Based::Axiom(9))
                 } else {
-                    Err(Cringe::casual_cringe())
+                    Err(Wrong::Unproved)
                 }
             })
-            .map_err(|_| Cringe::casual_cringe())
+            .map_err(|_| Wrong::Unproved)
     }
 
 // util
