@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         write!(out_lock, "{}", to_prove).unwrap();
         let last = line_proofs.pop();
         let first_wrong = {
-            line_proofs[..line_proofs.len() - 1].iter()
+            line_proofs.iter()
                 .enumerate()
                 .find_map(|(num, BaseExpr{expr, proof})| {
                     let num = num + 1;
