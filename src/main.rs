@@ -8,7 +8,7 @@ pub mod tree;
 pub mod proof_check;
 
 
-use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader}, iter};
+use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Write}, iter};
 
 use proof_check::{Cringe, ProofChecker};
 
@@ -47,33 +47,28 @@ fn main() -> Result<(), Box<dyn Error>> {
         })
         .into_iter();
 
-    iter::once(BaseExpr{ expr: to_prove, proof: Err(Cringe::casual_cringe()) })
-        .chain(proof)
-        .enumerate()
-        .for_each(|(idx, BaseExpr{expr, proof})| {
-            if idx == 0 {
-                print!("|-");
-            } else {
-                print!("{}: ", idx);
-            }
-            print!("{} ", expr);
-            if idx != 0 {
-                match &proof {
-                    Ok(base) => println!("[{:?}]", base),
-                    Err(_) => println!("[Wrong]"),
-                };
-            } else {
-                println!();
-            }
-        });
-
-    // let proof = Proof::new(manager.parse_proved(&to_prove), some_proved);
-
-    // proof_checker.check_proof(&proof)
-    //     .into_iter()
-    //     .for_each(|BaseExpr{expr, proof}| match proof {
-    //         Ok(base) => println!("{} [{:?}]", expr, base),
-    //         Err(_) => println!("{} [Wrong]", expr),
-    //     });
+    {
+        let stdout = io::stdout();
+        let mut out_lock = stdout.lock();
+        iter::once(BaseExpr{ expr: to_prove, proof: Err(Cringe::casual_cringe()) })
+            .chain(proof)
+            .enumerate()
+            .for_each(|(idx, BaseExpr{expr, proof})| {
+                if idx == 0 {
+                    write!(out_lock, "|-").unwrap();
+                } else {
+                    write!(out_lock, "{}: ", idx).unwrap();
+                }
+                write!(out_lock, "{} ", expr).unwrap();
+                if idx != 0 {
+                    match &proof {
+                        Ok(base) => writeln!(out_lock, "[{:?}]", base).unwrap(),
+                        Err(_) => writeln!(out_lock, "[Wrong]").unwrap(),
+                    };
+                } else {
+                    writeln!(out_lock).unwrap();
+                }
+            });
+    }
     Ok(())
 }

@@ -12,3 +12,6 @@ lalrpop = "0.19.6"
 lalrpop-util = "0.19.6"
 mset = "0.0.4"
 rustc-hash = "1.1.0"
+
+[profile.release]
+lto = true
