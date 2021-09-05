@@ -1,5 +1,7 @@
 use std::{cell::RefCell, collections::{HashSet}, fmt::{Display, Write}, hash::Hash, marker::PhantomData, ptr, rc::Rc};
 
+use rustc_hash::FxHashSet;
+
 use crate::tree::{ChildrenIter, DfsDir, Tree};
 
 use super::{Term, TermNode, TermVar, helpers::{VarType, Variable}, node_provider::{OperNode, OperNodeProvider}};
@@ -181,14 +183,14 @@ impl OperNode for Expr
 
 pub struct ExprProvider
 {
-    saved: RefCell<HashSet<ExprNode>>,
+    saved: RefCell<FxHashSet<ExprNode>>,
 }
 
 impl OperNodeProvider for ExprProvider
 {
     type Node = Expr;
 
-    fn node_set(&self) -> std::cell::RefMut<'_, HashSet<Rc<Self::Node>>> {
+    fn node_set(&self) -> std::cell::RefMut<'_, FxHashSet<Rc<Self::Node>>> {
         self.saved.borrow_mut()
     }
 }

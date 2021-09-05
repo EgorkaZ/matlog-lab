@@ -1,4 +1,6 @@
-use std::{cell::RefMut, collections::HashSet, hash::Hash, rc::Rc};
+use std::{cell::RefMut, hash::Hash, rc::Rc};
+
+use rustc_hash::FxHashSet;
 
 pub trait OperNode
 {
@@ -24,7 +26,7 @@ pub trait OperNodeProvider
         self.get_or_insert(mb_new)
     }
 
-    fn node_set(&self) -> RefMut<'_, HashSet<Rc<Self::Node>>>;
+    fn node_set(&self) -> RefMut<'_, FxHashSet<Rc<Self::Node>>>;
 
     fn get_or_insert(&self, node: Self::Node) -> Rc<Self::Node>
     {

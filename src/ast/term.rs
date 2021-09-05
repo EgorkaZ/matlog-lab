@@ -1,4 +1,6 @@
-use std::{cell::RefCell, collections::HashSet, fmt::{Display, Write}, hash::Hash, marker::PhantomData, ptr, rc::Rc};
+use std::{cell::RefCell, fmt::{Display, Write}, hash::Hash, marker::PhantomData, ptr, rc::Rc};
+
+use rustc_hash::FxHashSet;
 
 use super::{node_provider::{OperNode, OperNodeProvider}, helpers::{Variable, VarType}};
 use crate::tree::{ChildrenIter, Tree};
@@ -123,14 +125,14 @@ impl OperNode for Term
 #[derive(Debug, Clone)]
 pub struct TermProvider
 {
-    saved: RefCell<HashSet<Rc<Term>>>
+    saved: RefCell<FxHashSet<Rc<Term>>>
 }
 
 impl OperNodeProvider for TermProvider
 {
     type Node = Term;
 
-    fn node_set(&self) -> std::cell::RefMut<'_, HashSet<Rc<Self::Node>>> {
+    fn node_set(&self) -> std::cell::RefMut<'_, FxHashSet<Rc<Self::Node>>> {
         self.saved.borrow_mut()
     }
 }
@@ -139,7 +141,7 @@ impl TermProvider
 {
     pub fn new() -> Self
     {
-        TermProvider{ saved: RefCell::new(HashSet::new()) }
+        TermProvider{ saved: Default::default() }
     }
 
     pub fn add(&self, l: &TermNode, r: &TermNode) -> TermNode

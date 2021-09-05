@@ -110,11 +110,11 @@ impl<'a> Matcher<'a>
             },
             (BiOp(l_op, l_l, l_r), BiOp(r_op, r_l, r_r)) if l_op == r_op => {
                 self.match_exprs(l_l, r_l, expr_substs, vars_substs, var_subst)
-                    .and(self.match_exprs(l_r, r_r, expr_substs, vars_substs, var_subst))
+                    .and_then(|_| self.match_exprs(l_r, r_r, expr_substs, vars_substs, var_subst))
             }
             (Eq(l_l, l_r), Eq(r_l, r_r)) => {
                 Self::match_terms(l_l, r_l, vars_substs, var_subst)
-                    .and_then(|()| Self::match_terms(l_r, r_r, vars_substs, var_subst))
+                    .and_then(|_| Self::match_terms(l_r, r_r, vars_substs, var_subst))
             }
             _ => Err(Mismatch::Expr{ expected: Rc::clone(expected), actual: Rc::clone(checked) }),
         }
@@ -281,6 +281,10 @@ impl VarSubst
             Self::Free{ name: actual_name, .. } => name == *actual_name,
             Self::Bound => false,
         }
+    }
+
+    fn is_bound(&self) -> bool {
+        matches!(self, Self::Bound)
     }
 }
 

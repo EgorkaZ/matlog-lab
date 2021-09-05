@@ -1,4 +1,6 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{rc::Rc};
+
+use rustc_hash::FxHashMap;
 
 use crate::{ast::{Expr, ExprBinOp, ExprNode, ExprUnOp, TermVar}, matcher::Matcher, proof_check::QuanRule};
 
@@ -12,7 +14,7 @@ pub fn check_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, C
 
 fn check_modus_ponens(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Cringe>
 {
-    let possible_from: HashMap<_, _> = previous.iter()
+    let possible_from: FxHashMap<_, _> = previous.iter()
         .map(|BaseExpr{ expr, .. }| expr)
         .enumerate()
         .filter_map(|(impl_idx, expr)| {
