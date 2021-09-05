@@ -235,7 +235,6 @@ pub enum Mismatch
     Expr{ expected: ExprNode, actual: ExprNode },
     Term{ expected: TermNode, actual: TermNode },
     Variable{ expected: char, actual: char },
-    NonFreeToSubst{ var: char, substed: TermNode },
 }
 
 pub type MatchResult = Result<Substitutions, Mismatch>;

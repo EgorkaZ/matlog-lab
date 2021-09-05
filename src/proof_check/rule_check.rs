@@ -9,7 +9,7 @@ use super::{BaseExpr, Based, Cringe};
 pub fn check_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Cringe>
 {
     check_modus_ponens(checked, previous)
-        .or_else(|_| check_quan_rules(checked, previous))
+        .or_else(|mp_err| check_quan_rules(checked, previous).map_err(|quan_err| quan_err.min(mp_err)))
 }
 
 fn check_modus_ponens(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, Cringe>
@@ -26,14 +26,25 @@ fn check_modus_ponens(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based
                 _ => None,
             }
         })
-        .collect();
+        .fold(Default::default(), |mut res, (expr, idx)| {
+            match res.get_mut(&expr) {
+                Some(found) => {
+                    *found = idx.min(*found);
+                },
+                None => {
+                    res.insert(expr, idx);
+                }
+            }
+            res
+        });
 
     previous.iter()
         .map(|BaseExpr{ expr, .. }| expr)
         .enumerate()
-        .find_map(|(from_idx, expr)| {
+        .filter_map(|(from_idx, expr)| {
             possible_from.get(expr).map(|impl_idx| (from_idx, *impl_idx))
         })
+        .min()
         .map_or(Err(Cringe::casual_cringe()), |(from_idx, impl_idx)| {
             Ok(Based::MP { from: from_idx + 1, imp: impl_idx + 1 })
         })
@@ -55,7 +66,8 @@ fn check_quan_rules(checked: &ExprNode, previous: &[BaseExpr]) -> Result<Based, 
                 }
             });
         check_exist_rule((from, to), implications.clone())
-            .or_else(|_old_cringe| check_any_rule((from, to), implications))
+            .or_else(|exist_err| check_any_rule((from, to), implications)
+                .map_err(|any_err| any_err.min(exist_err)))
     } else {
         Err(Cringe::casual_cringe())
     }
@@ -114,11 +126,11 @@ fn check_rule_detail(
     candidates_it
         .fold(Err(Cringe::casual_cringe()), |res, (idx, var)| {
             let free_vars = cached_free_vars.get_or_insert_with(|| Matcher::all_free_vars(non_quan));
-            res.or_else(|_| {
+            res.or_else(|prev_err| {
                 if !free_vars.contains(&var) {
                     Ok(Based::Rule{ orig: idx + 1, rule })
                 } else {
-                    Err(Cringe::FreeVarInRule{ var, rule: QuanRule::Exist })
+                    Err(prev_err.min(Cringe::FreeVarInRule{ var, rule: QuanRule::Exist }))
                 }
             })
         })

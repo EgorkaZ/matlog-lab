@@ -183,10 +183,8 @@ impl Display for Term
         match self {
             Var(var) => var.fmt(f),
             Zero => f.write_char('0'),
-            UnOp(UnOper::Next, sub) => f.write_char('(')
-                .and_then(|()| sub.fmt(f))
-                .and_then(|()| f.write_str("')")),
-            BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
+            UnOp(UnOper::Next, sub) => f.write_fmt(format_args!("{}'", sub)),
+            BiOp(op, l, r) => f.write_fmt(format_args!("({}{}{})", l, op, r)),
         }
     }
 }

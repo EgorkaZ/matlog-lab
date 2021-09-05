@@ -66,7 +66,7 @@ impl<'a> ProofChecker<'a>
     pub fn match_schemes_and_axioms(&self, checked: &ExprNode) -> BaseExpr
     {
         let proof = self.match_schemes(checked)
-            .or_else(|_| self.match_axioms(checked));
+            .or_else(|schemes_err| self.match_axioms(checked).map_err(|ax_err| schemes_err.min(ax_err)));
         BaseExpr{ expr: Rc::clone(checked), proof }
     }
 
@@ -106,15 +106,13 @@ impl<'a> ProofChecker<'a>
         self.schemes[10..].into_iter().enumerate()
             .map(|(idx, matcher)| {
                 matcher.match_expression(checked)
+                    .map_err(|_mismatch| Cringe::casual_cringe())
                     .and_then(|substs| {
-                        // println!("managed to match! Checked: {}", checked);
                         let quan_var = substs.var_mapping().get_subst(&"x".into()).unwrap();
 
                         let expr_substs = substs.expr_substs();
                         let orig = expr_substs.get_subst(&"orig".into()).unwrap();
                         let substed = expr_substs.get_subst(&"substed".into()).unwrap();
-
-                        // println!("quan_var: {}, orig: {}, substed: {}", quan_var, orig, substed);
 
                         let orig_matcher = self.manager.matcher_node(Rc::clone(orig));
 
@@ -122,30 +120,23 @@ impl<'a> ProofChecker<'a>
                             let substed_term = substs.var_subst().get_subst(quan_var).unwrap();
                             let free_vars = Matcher::all_vars(substed_term);
                             if !(Matcher::all_bound_at_var_mention(orig, *quan_var).bitand(&free_vars)).is_empty() {
-                                Err(Mismatch::NonFreeToSubst{ var: *quan_var, substed: Rc::clone(substed_term) })
+                                let rule = if idx == 0 { QuanRule::Any } else { QuanRule::Exist };
+                                Err(Cringe::NonFreeToSubst{ var: *quan_var, substed: Rc::clone(substed_term), rule })
                             } else {
-                                Ok(substs)
+                                Ok(Based::Scheme(11 + idx as u8))
                             }
                         };
 
                         orig_matcher.match_expr_free_var_subst(substed, *quan_var)
                             .validate(|match_res| {
-                                // println!("matched in orig! Res: {:?}", match_res);
-                                match_res.and_then(check_freedom_for_subst)
+                                match_res
+                                    .map_err(|_| Cringe::casual_cringe())
+                                    .and_then(check_freedom_for_subst)
                             })
-                    })
-                    .map(|_| Based::Scheme(11 + idx as u8))
-                    .map_err(|mismatch| {
-                        if let Mismatch::NonFreeToSubst{var, substed} = mismatch {
-                            let rule = if idx == 0 { QuanRule::Any } else { QuanRule::Exist };
-                            Cringe::NonFreeToSubst{var, substed, rule}
-                        } else {
-                            Cringe::casual_cringe()
-                        }
                     })
             })
             .fold(Err(Cringe::casual_cringe()), |res, match_res| {
-                match_res.or(res)
+                match_res.or_else(|match_err| res.map_err(|prev_err| prev_err.min(match_err)))
             })
     }
 

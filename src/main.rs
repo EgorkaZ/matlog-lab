@@ -32,43 +32,68 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut to_prove = String::new();
     reader.read_line(&mut to_prove).expect("I wanted to read this line so hard...");
-    let to_prove = manager.parse_proved(&to_prove);
+    let proved = manager.parse_proved(&to_prove);
 
-    let proof = reader.lines()
+    let mut line_proofs: Vec<_> = reader.lines()
         .map(|mb_line| mb_line.expect("I really wanted to read this line"))
         .map(|line| manager.parse(&line))
         .map(|expr| {
             proof_checker.match_schemes_and_axioms(&expr)
         })
         .fold(Vec::new(), |mut proved, BaseExpr{expr, mut proof} | {
-            proof = proof.or_else(|_| check_rules(&expr, &proved));
+            proof = proof.or_else(|err| {
+                check_rules(&expr, &proved)
+                    .map_err(|rules_err| rules_err.min(err))
+            });
             proved.push(BaseExpr{ expr, proof });
             proved
-        })
-        .into_iter();
+        });
 
     {
         let stdout = io::stdout();
         let mut out_lock = stdout.lock();
-        iter::once(BaseExpr{ expr: to_prove, proof: Err(Cringe::casual_cringe()) })
-            .chain(proof)
-            .enumerate()
-            .for_each(|(idx, BaseExpr{expr, proof})| {
-                if idx == 0 {
-                    write!(out_lock, "|-").unwrap();
-                } else {
-                    write!(out_lock, "{}: ", idx).unwrap();
+
+        write!(out_lock, "{}", to_prove).unwrap();
+        let last = line_proofs.pop();
+        let first_cringe = {
+            line_proofs[..line_proofs.len() - 1].iter()
+                .enumerate()
+                .find_map(|(num, BaseExpr{expr, proof})| {
+                    let num = num + 1;
+                    match proof {
+                        Ok(base) => {
+                            writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap();
+                            None
+                        },
+                        Err(cringe) => {
+                            Some((num, cringe))
+                        }
+                    }
+                })
+        };
+
+        let mut print_cringe = |num, cringe| {
+            write!(out_lock, "Expression {}", num).unwrap();
+            if !matches!(cringe, &Cringe::Unproved) {
+                write!(out_lock, ":").unwrap();
+            }
+            writeln!(out_lock, " {}.", cringe).unwrap();
+        };
+
+        if let Some((num, cringe)) = first_cringe {
+            print_cringe(num, cringe);
+        } else {
+            if let Some(BaseExpr{ expr, proof }) = last {
+                let num = line_proofs.len() + 1;
+                match proof {
+                    Ok(base) if proved == expr => writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap(),
+                    Err(cringe) => print_cringe(num, &cringe),
+                    _ => writeln!(out_lock, "The proof proves different expression.").unwrap(),
                 }
-                write!(out_lock, "{} ", expr).unwrap();
-                if idx != 0 {
-                    match &proof {
-                        Ok(base) => writeln!(out_lock, "[{:?}]", base).unwrap(),
-                        Err(_) => writeln!(out_lock, "[Wrong]").unwrap(),
-                    };
-                } else {
-                    writeln!(out_lock).unwrap();
-                }
-            });
+            } else {
+                writeln!(out_lock, "The proof proves different expression.").unwrap();
+            }
+        }
     }
     Ok(())
 }
