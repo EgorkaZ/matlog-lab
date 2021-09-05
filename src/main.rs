@@ -27,73 +27,33 @@ fn get_reader() -> Box<dyn BufRead>
 
 fn main() -> Result<(), Box<dyn Error>> {
     let manager = ExprManager::new();
-    let proof_checker = ProofChecker::new(&manager);
     let mut reader = get_reader();
 
     let mut to_prove = String::new();
     reader.read_line(&mut to_prove).expect("I wanted to read this line so hard...");
-    let proved = manager.parse_proved(&to_prove);
+    let (hypothesis, proved) = manager.parse_proved(&to_prove);
 
-    let mut line_proofs: Vec<_> = reader.lines()
-        .map(|mb_line| mb_line.expect("I really wanted to read this line"))
+    let proof_checker = ProofChecker::new(&manager, &hypothesis);
+
+    let proof = reader.lines()
+        .map(|mb_line| mb_line.expect("I wanted this line soo much..."))
         .map(|line| manager.parse(&line))
-        .map(|expr| {
-            proof_checker.match_schemes_and_axioms(&expr)
-        })
-        .fold(Vec::new(), |mut proved, BaseExpr{expr, mut proof} | {
-            proof = proof.or_else(|err| {
-                check_rules(&expr, &proved)
-                    .map_err(|rules_err| rules_err.min(err))
-            });
+        .map(|expr| proof_checker.check_single_expr(&expr))
+        .fold(Vec::new(), |mut proved, BaseExpr{ expr, mut proof }| {
+            proof = proof.or_else(|_| check_rules(&expr, &proved));
             proved.push(BaseExpr{ expr, proof });
             proved
         });
 
-    {
-        let stdout = io::stdout();
-        let mut out_lock = stdout.lock();
-
-        write!(out_lock, "{}", to_prove).unwrap();
-        let last = line_proofs.pop();
-        let first_wrong = {
-            line_proofs.iter()
-                .enumerate()
-                .find_map(|(num, BaseExpr{expr, proof})| {
-                    let num = num + 1;
-                    match proof {
-                        Ok(base) => {
-                            writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap();
-                            None
-                        },
-                        Err(error) => {
-                            Some((num, error))
-                        }
-                    }
-                })
-        };
-
-        let mut print_error = |num, error| {
-            write!(out_lock, "Expression {}", num).unwrap();
-            if !matches!(error, &Wrong::Unproved) {
-                write!(out_lock, ":").unwrap();
+    proof.iter()
+        .enumerate()
+        .for_each(|(num, BaseExpr{ expr, proof })| {
+            let num = num + 1;
+            print!("{}: {} ", num, expr);
+            match proof {
+                Ok(base) => println!("[{}]", base),
+                Err(..) => println!("[Unproved]"),
             }
-            writeln!(out_lock, " {}.", error).unwrap();
-        };
-
-        if let Some((num, error)) = first_wrong {
-            print_error(num, error);
-        } else {
-            if let Some(BaseExpr{ expr, proof }) = last {
-                let num = line_proofs.len() + 1;
-                match proof {
-                    Ok(base) if proved == expr => writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap(),
-                    Err(error) => print_error(num, &error),
-                    _ => writeln!(out_lock, "The proof proves different expression.").unwrap(),
-                }
-            } else {
-                writeln!(out_lock, "The proof proves different expression.").unwrap();
-            }
-        }
-    }
+        });
     Ok(())
 }

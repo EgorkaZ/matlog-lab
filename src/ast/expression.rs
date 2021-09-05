@@ -1,29 +1,32 @@
-use std::{cell::RefCell, collections::{HashSet}, fmt::{Display, Write}, hash::Hash, marker::PhantomData, ptr, rc::Rc};
+use std::{cell::RefCell, fmt::{Display, Write}, hash::Hash, ptr, rc::Rc};
 
 use rustc_hash::FxHashSet;
 
-use crate::tree::{ChildrenIter, DfsDir, Tree};
+use crate::tree::{ChildrenIter, Tree};
 
-use super::{Term, TermNode, TermVar, helpers::{VarType, Variable}, node_provider::{OperNode, OperNodeProvider}};
+use super::{node_provider::{OperNode, OperNodeProvider}};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ExprVarType;
-
-impl VarType for ExprVarType
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ExprVar
 {
-    fn type_name() -> &'static str {
-        "Pred"
-    }
+    Static(String),
+    Meta(String),
 }
 
-pub type ExprPred = Variable<ExprVarType>;
+impl Display for ExprVar
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Static(name) => f.write_str(name),
+            Self::Meta(name) => f.write_str(name).and_then(|()| f.write_str(":Meta"))
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnOper
 {
     Neg,
-    Any(TermVar),
-    Ext(TermVar),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -38,61 +41,12 @@ pub enum BinOper
 #[derive(Debug, Clone, Eq)]
 pub enum Expr
 {
-    Pred(ExprPred),
+    Variable(ExprVar),
     UnOp(UnOper, ExprNode),
     BiOp(BinOper, ExprNode, ExprNode),
-    Eq(TermNode, TermNode),
 }
 
 pub type ExprNode = Rc<Expr>;
-
-impl Expr
-{
-    pub fn free_variables(node: &ExprNode) -> impl Iterator<Item = &TermVar>
-    {
-        let term_into_vars = |term| {
-            Term::dfs(term)
-                .filter_map(|(curr, _)| {
-                    match &**curr {
-                        Term::Var(var) => Some(var),
-                        _ => None,
-                    }
-                })
-        };
-
-        let mut bound = HashSet::new();
-        Expr::dfs(&node)
-            .filter_map(move |(curr, dir)| {
-                match &**curr {
-                    Expr::UnOp(UnOper::Any(var) | UnOper::Ext(var), ..) => {
-                        if let DfsDir::In = dir {
-                            bound.insert(var);
-                        } else {
-                            bound.remove(&var);
-                        }
-                        None
-                    },
-                    Expr::Eq(l, r) => {
-                        Some(term_into_vars(l).chain(term_into_vars(r)))
-                    },
-                    _ => None,
-                }
-            })
-            .flatten()
-    }
-
-    pub fn bound_variables(node: &ExprNode) -> HashSet<&TermVar>
-    {
-        Expr::dfs(node)
-            .filter_map(|(curr, _)| {
-                match &**curr {
-                    Expr::UnOp(UnOper::Any(var) | UnOper::Ext(var), ..) => Some(var),
-                    _ => None,
-                }
-            })
-            .collect()
-    }
-}
 
 impl Hash for Expr
 {
@@ -100,7 +54,7 @@ impl Hash for Expr
         use Expr::*;
 
         match self {
-            Pred(name) => {
+            Variable(name) => {
                 state.write_u8(0);
                 name.hash(state)
             },
@@ -115,11 +69,6 @@ impl Hash for Expr
                 ptr::hash(Rc::as_ptr(l), state);
                 ptr::hash(Rc::as_ptr(r), state)
             },
-            Eq(l, r) => {
-                state.write_u8(3);
-                ptr::hash(Rc::as_ptr(l), state);
-                ptr::hash(Rc::as_ptr(r), state)
-            },
         }
     }
 }
@@ -130,7 +79,7 @@ impl PartialEq for Expr
         use Expr::*;
 
         match (self, other) {
-            (Pred(l), Pred(r)) => l == r,
+            (Variable(l), Variable(r)) => l == r,
             (UnOp(l_op, l_sub), UnOp(r_op, r_sub)) => {
                 l_op == r_op &&
                     Rc::ptr_eq(l_sub, r_sub)
@@ -140,10 +89,6 @@ impl PartialEq for Expr
                 BiOp(r_op, r_l, r_r)) => {
                 l_op == r_op &&
                     Rc::ptr_eq(l_l, r_l) &&
-                    Rc::ptr_eq(l_r, r_r)
-            },
-            (Eq(l_l, l_r), Eq(r_l, r_r)) => {
-                Rc::ptr_eq(l_l, r_l) &&
                     Rc::ptr_eq(l_r, r_r)
             },
             _ => false
@@ -222,29 +167,14 @@ impl ExprProvider
         self.un_op(UnOper::Neg, sub)
     }
 
-    pub fn any(&self, var: TermVar, sub: &ExprNode) -> ExprNode
+    pub fn var(&self, name: &str) -> ExprNode
     {
-        self.un_op(UnOper::Any(var), sub)
+        self.get_or_insert(Expr::Variable(ExprVar::Static(name.into())))
     }
 
-    pub fn ext(&self, var: TermVar, sub: &ExprNode) -> ExprNode
+    pub fn meta(&self, name: &str) -> ExprNode
     {
-        self.un_op(UnOper::Ext(var), sub)
-    }
-
-    pub fn eq(&self, l: &TermNode, r: &TermNode) -> ExprNode
-    {
-        self.get_or_insert(Expr::Eq(Rc::clone(l), Rc::clone(r)))
-    }
-
-    pub fn pred(&self, name: char) -> ExprNode
-    {
-        self.get_or_insert(Expr::Pred(ExprPred::Static(name, PhantomData)))
-    }
-
-    pub fn repl(&self, name: &str) -> ExprNode
-    {
-        self.get_or_insert(Expr::Pred(ExprPred::Dynamic(String::from(name))))
+        self.get_or_insert(Expr::Variable(ExprVar::Meta(name.into())))
     }
 }
 
@@ -256,8 +186,6 @@ impl Display for UnOper
 
         match self {
             Neg => f.write_char('!'),
-            Any(var) => f.write_fmt(format_args!("@{}.", var)),
-            Ext(var) => f.write_fmt(format_args!("?{}.", var)),
         }
     }
 }
@@ -281,10 +209,9 @@ impl Display for Expr
         use Expr::*;
 
         match self {
-            Pred(name) => name.fmt(f),
+            Variable(name) => name.fmt(f),
             UnOp(op, sub) => f.write_fmt(format_args!("({}{})", op, sub)),
-            BiOp(op, l, r) => f.write_fmt(format_args!("({}{}{})", l, op, r)),
-            Eq(l, r) => f.write_fmt(format_args!("({}={})", l, r)),
+            BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
         }
     }
 }

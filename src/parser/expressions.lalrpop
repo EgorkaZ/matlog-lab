@@ -1,0 +1,54 @@
+use crate::ast;
+use ast::{ExprNode, ExprProvider};
+use std::marker::PhantomData;
+
+grammar(expr_provider: &ExprProvider);
+
+pub Proved: (Vec<ExprNode>, ExprNode) = {
+    <h: Hypothesis?> "|-" <e: Expr> => (h.unwrap_or(vec![]), e),
+};
+
+Hypothesis: Vec<ExprNode> = {
+    <fst: Expr> <mut rest: (("," <Expr>)*)> => {
+        rest.insert(0, fst);
+        rest
+    }
+};
+
+pub Expr = {
+    <Impl>,
+};
+
+Impl = {
+    Disj,
+    <l:Disj> "->" <r:Impl> => expr_provider.imp(&l, &r)
+};
+
+Disj = {
+    Conj,
+    <l:Disj> "|" <r:Conj> => expr_provider.disj(&l, &r),
+};
+
+Conj = {
+    Unary,
+    <l:Conj> "&" <r:Unary> => expr_provider.conj(&l, &r),
+};
+
+Unary = {
+    Variable,
+    "(" <Impl> ")",
+    "!" <Unary> => expr_provider.neg(&<>),
+};
+
+Variable: ExprNode = {
+    StaticVar => expr_provider.var(<>),
+    MetaVar => expr_provider.meta(<>),
+};
+
+StaticVar: &'input str = {
+    r"[A-Z][A-Z0-9']*",
+}
+
+MetaVar: &'input str = {
+    r"[a-z]+:Meta" => &<>[..<>.len() - 5],
+}

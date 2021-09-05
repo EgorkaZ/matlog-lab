@@ -1,85 +1,71 @@
-use std::{ops::BitAnd, rc::Rc};
+use std::{rc::Rc};
+
+use mset::MultiSet;
 
 use crate::{
-    ast::{ExprNode, Term, TermVar, TermUnOp},
-    matcher::{Matcher, Substitutions, helpers::{SubstContainer}},
+    ast::{ExprNode},
+    matcher::{Matcher},
     parser::ExprManager};
 
-use super::{BaseExpr, Based, Wrong, QuanRule};
+use super::{BaseExpr, Based, Wrong};
 
 
 
 pub struct ProofChecker<'a>
 {
-    schemes: Vec<Matcher<'a>>,
-    axioms: Vec<Matcher<'a>>,
+    schemes: Vec<Matcher>,
+    hypothesis: &'a mset::MultiSet<ExprNode>,
     manager: &'a ExprManager,
 }
 
 impl<'a> ProofChecker<'a>
 {
-    pub fn new(manager: &'a ExprManager) -> Self
+    pub fn new(manager: &'a ExprManager, hypothesis: &'a MultiSet<ExprNode>) -> Self
     {
         let schemes = [
-            "a:Pred -> b:Pred -> a:Pred",
-            "(a:Pred -> b:Pred) -> (a:Pred -> b:Pred -> c:Pred) -> (a:Pred -> c:Pred)",
-            "a:Pred -> b:Pred -> a:Pred & b:Pred",
-            "a:Pred & b:Pred -> a:Pred",
-            "a:Pred & b:Pred -> b:Pred",
-            "a:Pred -> a:Pred | b:Pred",
-            "b:Pred -> a:Pred | b:Pred",
-            "(a:Pred -> c:Pred) -> (b:Pred -> c:Pred) -> (a:Pred | b:Pred -> c:Pred)",
-            "(a:Pred -> b:Pred) -> (a:Pred -> !b:Pred) -> !a:Pred",
-            "!!a:Pred -> a:Pred",
-
-            "(@x:Var.orig:Pred) -> substed:Pred",
-            "substed:Pred -> ?x:Var.orig:Pred"
+            "a:Meta -> b:Meta -> a:Meta",
+            "(a:Meta -> b:Meta) -> (a:Meta -> b:Meta -> c:Meta) -> (a:Meta -> c:Meta)",
+            "a:Meta -> b:Meta -> a:Meta & b:Meta",
+            "a:Meta & b:Meta -> a:Meta",
+            "a:Meta & b:Meta -> b:Meta",
+            "a:Meta -> a:Meta | b:Meta",
+            "b:Meta -> a:Meta | b:Meta",
+            "(a:Meta -> c:Meta) -> (b:Meta -> c:Meta) -> (a:Meta | b:Meta -> c:Meta)",
+            "(a:Meta -> b:Meta) -> (a:Meta -> !b:Meta) -> !a:Meta",
+            "a:Meta -> !a:Meta -> b:Meta",
         ];
         let schemes = Self::into_matchers(manager, &schemes);
 
-        let axioms = [
-            "a:Var = b:Var -> (a:Var)' = (b:Var)'",
-            "a:Var = b:Var -> a:Var = c:Var -> b:Var = c:Var",
-            "(a:Var)' = (b:Var)' -> a:Var = b:Var",
-            "!(a:Var)' = 0",
-            "a:Var + (b:Var)' = (a:Var + b:Var)'",
-            "a:Var + 0 = a:Var",
-            "a:Var * 0 = 0",
-            "a:Var * (b:Var)' = a:Var * b:Var + a:Var",
-
-            "(zeroed:Pred) & (@x:Var.orig:Pred -> (nexted:Pred)) -> orig:Pred",
-        ];
-        let axioms = Self::into_matchers(manager, &axioms);
-
-        ProofChecker{ schemes, axioms, manager }
+        ProofChecker{ schemes, manager, hypothesis }
     }
 
-    pub fn match_schemes_and_axioms(&self, checked: &ExprNode) -> BaseExpr
+    pub fn check_single_expr(&self, checked: &ExprNode) -> BaseExpr
     {
-        let proof = self.match_schemes(checked)
-            .or_else(|schemes_err| self.match_axioms(checked).map_err(|ax_err| schemes_err.min(ax_err)));
+        let proof = self.check_in_hypothesis(checked)
+            .or_else(|_| self.match_schemes(checked));
         BaseExpr{ expr: Rc::clone(checked), proof }
     }
 
 //private:
 
-// proof checking
+    fn check_in_hypothesis(&self, checked: &ExprNode) -> Result<Based, Wrong>
+    {
+        if self.hypothesis.contains(checked) {
+            Ok(Based::FromHyp)
+        } else {
+            Err(Wrong::Unproved)
+        }
+    }
 
     fn match_schemes(&self, checked: &ExprNode) -> Result<Based, Wrong>
     {
-        match self.match_basic(checked, &self.schemes[..10]) {
+        match self.match_basic(checked, &self.schemes) {
             Some(num) => Ok(Based::Scheme(num)),
-            None => self.match_quan_scheme(checked),
+            None => Err(Wrong::Unproved),
         }
     }
 
-    fn match_axioms(&self, checked: &ExprNode) -> Result<Based, Wrong>
-    {
-        match self.match_basic(checked, &self.axioms[..8]) {
-            Some(num) => Ok(Based::Axiom(num)),
-            None => self.match_quan_axiom(checked),
-        }
-    }
+// proof checking
 
     fn match_basic(&self, checked: &ExprNode, matchers: &[Matcher]) -> Option<u8>
     {
@@ -90,93 +76,8 @@ impl<'a> ProofChecker<'a>
         matched.map(|found| found as u8 + 1)
     }
 
-    fn match_quan_scheme(&self, checked: &ExprNode) -> Result<Based, Wrong>
-    {
-        // "(@x:Var.orig:Pred) -> substed:Pred",
-        // "substed:Pred -> ?x:Var.orig:Pred"
-        self.schemes[10..].iter().enumerate()
-            .map(|(idx, matcher)| {
-                matcher.match_expression(checked)
-                    .map_err(|_mismatch| Wrong::Unproved)
-                    .and_then(|substs| {
-                        let quan_var = substs.var_mapping().get_subst(&"x".into()).unwrap();
-
-                        let expr_substs = substs.expr_substs();
-                        let orig = expr_substs.get_subst(&"orig".into()).unwrap();
-                        let substed = expr_substs.get_subst(&"substed".into()).unwrap();
-
-                        let orig_matcher = self.manager.matcher_node(Rc::clone(orig));
-
-                        let check_freedom_for_subst = |substs: Substitutions| {
-                            let substed_term = substs.var_subst().get_subst(quan_var).unwrap();
-                            let free_vars = Matcher::all_vars(substed_term);
-                            if !(Matcher::all_bound_at_var_mention(orig, *quan_var).bitand(&free_vars)).is_empty() {
-                                let rule = if idx == 0 { QuanRule::Any } else { QuanRule::Exist };
-                                Err(Wrong::NonFreeToSubst{ var: *quan_var, substed: Rc::clone(substed_term), rule })
-                            } else {
-                                Ok(Based::Scheme(11 + idx as u8))
-                            }
-                        };
-
-                        orig_matcher.match_expr_free_var_subst(substed, *quan_var)
-                            .validate(|match_res| {
-                                match_res
-                                    .map_err(|_| Wrong::Unproved)
-                                    .and_then(check_freedom_for_subst)
-                            })
-                    })
-            })
-            .fold(Err(Wrong::Unproved), |res, match_res| {
-                match_res.or_else(|match_err| res.map_err(|prev_err| prev_err.min(match_err)))
-            })
-    }
-
-    fn match_quan_axiom(&self, checked: &ExprNode) -> Result<Based, Wrong>
-    {
-        // "(zeroed:Pred) & (@x:Var.orig:Pred -> (nexted:Pred)) -> orig:Pred"
-        self.axioms[8]
-            .match_expression(checked)
-            .map_err(|_| Wrong::Unproved)
-            .and_then(|substs| {
-                let quan_var = substs.var_mapping().get_subst(&"x".into()).unwrap();
-
-                let expr_substs = substs.expr_substs();
-                let orig = expr_substs.get_subst(&"orig".into()).unwrap();
-                let zeroed = expr_substs.get_subst(&"zeroed".into()).unwrap();
-                let nexted = expr_substs.get_subst(&"nexted".into()).unwrap();
-
-                let orig_matcher = self.manager.matcher_node(Rc::clone(orig));
-
-                let zeroed = orig_matcher.match_expr_free_var_subst(zeroed, *quan_var)
-                    .validate(|match_res| match_res.map_or(false, |subst| {
-                        matches!(**subst.var_subst().get_subst(quan_var).unwrap(), Term::Zero)
-                    }));
-
-                let nexted = orig_matcher.match_expr_free_var_subst(nexted, *quan_var)
-                    .validate(|match_res| match_res.map_or(false, |subst| {
-                        use Term::{UnOp, Var};
-                        use TermUnOp::Next;
-
-                        let var_subst = subst.var_subst().get_subst(quan_var).unwrap();
-                        if let UnOp(Next, sub) = &**var_subst {
-                            if let Var(TermVar::Static(sub_var_name, ..)) = &**sub {
-                                return sub_var_name == quan_var
-                            }
-                        }
-                        false
-                    }));
-
-                if zeroed && nexted {
-                    Ok(Based::Axiom(9))
-                } else {
-                    Err(Wrong::Unproved)
-                }
-            })
-            .map_err(|_| Wrong::Unproved)
-    }
-
 // util
-    fn into_matchers<'b>(manager: &'b ExprManager, as_strs: &[&str]) -> Vec<Matcher<'b>>
+    fn into_matchers(manager: &ExprManager, as_strs: &[&str]) -> Vec<Matcher>
     {
         as_strs.iter()
             .map(|as_str| manager.matcher_str(*as_str))
