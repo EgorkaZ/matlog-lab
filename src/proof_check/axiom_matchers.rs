@@ -2,10 +2,10 @@ use std::{ops::BitAnd, rc::Rc};
 
 use crate::{
     ast::{ExprNode, Term, TermVar, TermUnOp},
-    matcher::{Matcher, Mismatch, Substitutions, helpers::{SubstContainer}},
+    matcher::{Matcher, Substitutions, helpers::{SubstContainer}},
     parser::ExprManager};
 
-use super::{BaseExpr, Based, Cringe, Proof, QuanRule};
+use super::{BaseExpr, Based, Cringe, QuanRule};
 
 
 
@@ -54,15 +54,6 @@ impl<'a> ProofChecker<'a>
         ProofChecker{ schemes, axioms, manager }
     }
 
-    pub fn check_proof(&self, proof: &Proof) -> Vec<BaseExpr>
-    {
-        proof.proof.iter()
-            .map(|base_expr| {
-                base_expr.clone()
-            })
-            .collect()
-    }
-
     pub fn match_schemes_and_axioms(&self, checked: &ExprNode) -> BaseExpr
     {
         let proof = self.match_schemes(checked)
@@ -103,7 +94,7 @@ impl<'a> ProofChecker<'a>
     {
         // "(@x:Var.orig:Pred) -> substed:Pred",
         // "substed:Pred -> ?x:Var.orig:Pred"
-        self.schemes[10..].into_iter().enumerate()
+        self.schemes[10..].iter().enumerate()
             .map(|(idx, matcher)| {
                 matcher.match_expression(checked)
                     .map_err(|_mismatch| Cringe::casual_cringe())
@@ -187,7 +178,7 @@ impl<'a> ProofChecker<'a>
 // util
     fn into_matchers<'b>(manager: &'b ExprManager, as_strs: &[&str]) -> Vec<Matcher<'b>>
     {
-        as_strs.into_iter()
+        as_strs.iter()
             .map(|as_str| manager.matcher_str(*as_str))
             .collect()
     }

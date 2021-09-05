@@ -31,7 +31,7 @@ impl<Key, Substituted> SubstContainer<Key, Substituted> for HashMap<Key, Substit
           Substituted: Clone
 {
     fn get_subst(&self, key: &Key) -> Option<&'_ Substituted> {
-        self.get(&key)
+        self.get(key)
     }
 
     fn substitute(&mut self, key: &Key, subst: Substituted) {

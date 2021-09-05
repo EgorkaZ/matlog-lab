@@ -8,7 +8,7 @@ pub mod tree;
 pub mod proof_check;
 
 
-use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Write}, iter};
+use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Write}};
 
 use proof_check::{Cringe, ProofChecker};
 

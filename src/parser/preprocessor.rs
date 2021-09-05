@@ -8,9 +8,9 @@ pub fn preprocess<Iter>(it: Iter) -> String
 
     // let's insert fake closing ')' as EOF, so after zero brace level '$' were also inserted
     // this one will be inserted into 'res' string, so will be deleted later
-    let mut it = it.chain(")".chars());
+    let it = it.chain(")".chars());
 
-    while let Some(curr) = it.next() {
+    for curr in it {
         if curr.is_whitespace() {
             continue;
         }

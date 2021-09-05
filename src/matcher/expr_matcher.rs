@@ -281,10 +281,6 @@ impl VarSubst
             Self::Bound => false,
         }
     }
-
-    fn is_bound(&self) -> bool {
-        matches!(self, Self::Bound)
-    }
 }
 
 impl SubstContainer<char, TermNode> for VarSubst

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::{Display, Pointer, Write}};
+use std::{cmp::Ordering, fmt::{Display, Write}};
 
 use crate::ast::{TermNode, ExprNode};
 
