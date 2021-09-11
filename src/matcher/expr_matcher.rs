@@ -1,4 +1,6 @@
-use std::{collections::{HashMap}, fmt::Display, hash::Hash, rc::Rc};
+use std::{fmt::Display, hash::Hash, rc::Rc};
+
+use rustc_hash::FxHashMap;
 
 use crate::{ast::{Expr, ExprNode, ExprVar}};
 
@@ -25,15 +27,13 @@ impl Matcher
 // private:
     fn run_matching(&self, expected: &ExprNode) -> MatchResult
     {
-        let mut vars_substs = HashMap::new();
-        let mut expr_substs = HashMap::new();
-        self.match_exprs(&self.basis, expected, &mut expr_substs, &mut vars_substs)
+        let mut expr_substs = Default::default();
+        self.match_exprs(&self.basis, expected, &mut expr_substs)
             .map(|_| Substitutions{ exprs: expr_substs })
     }
 
     fn match_exprs(&self, expected: &ExprNode, checked: &ExprNode,
-        expr_substs: &mut HashMap<String, ExprNode>,
-        vars_substs: &mut HashMap<String, char>)-> Result<(), Mismatch>
+        expr_substs: &mut FxHashMap<String, ExprNode>,)-> Result<(), Mismatch>
     {
         use Expr::*;
 
@@ -43,11 +43,11 @@ impl Matcher
             },
             (Variable(ExprVar::Static(l, ..)), Variable(ExprVar::Static(r, ..))) if l == r => Ok(()),
             (UnOp(l_op, l_sub), UnOp(r_op, r_sub)) if l_op == r_op => {
-                self.match_exprs(l_sub, r_sub, expr_substs, vars_substs)
+                self.match_exprs(l_sub, r_sub, expr_substs)
             },
             (BiOp(l_op, l_l, l_r), BiOp(r_op, r_l, r_r)) if l_op == r_op => {
-                self.match_exprs(l_l, r_l, expr_substs, vars_substs)
-                    .and_then(|_| self.match_exprs(l_r, r_r, expr_substs, vars_substs))
+                self.match_exprs(l_l, r_l, expr_substs)
+                    .and_then(|_| self.match_exprs(l_r, r_r, expr_substs))
             }
             _ => Err(Mismatch::Expr{ expected: Rc::clone(expected), actual: Rc::clone(checked) }),
         }
@@ -71,12 +71,12 @@ impl Matcher
 #[derive(Debug)]
 pub struct Substitutions
 {
-    exprs: HashMap<String, ExprNode>,
+    exprs: FxHashMap<String, ExprNode>,
 }
 
 impl Substitutions
 {
-    pub fn expr_substs(&self) -> &'_ impl SubstContainer<String, ExprNode>
+    pub fn expr_substs(&self) -> &'_ FxHashMap<String, ExprNode>
     { &self.exprs }
 }
 

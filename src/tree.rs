@@ -1,5 +1,27 @@
 #![allow(dead_code)]
-use std::ops::Deref;
+use std::{cell::RefMut, hash::Hash, ops::Deref, rc::Rc};
+
+use rustc_hash::FxHashSet;
+
+pub trait NodeProvider {
+
+    type Node: Eq + Hash;
+
+    fn node_set(&self) -> RefMut<'_, FxHashSet<Rc<Self::Node>>>;
+
+    fn get_or_insert(&self, node: Self::Node) -> Rc<Self::Node>
+    {
+        let mut set = self.node_set();
+
+        if let Some(found) = set.get(&node) {
+            Rc::clone(found)
+        } else {
+            let returned = Rc::new(node);
+            set.insert(Rc::clone(&returned));
+            returned
+        }
+    }
+}
 
 pub trait Tree
 {

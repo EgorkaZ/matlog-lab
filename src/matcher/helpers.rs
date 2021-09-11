@@ -1,4 +1,6 @@
-use std::{cmp::Eq, collections::{HashMap}, hash::Hash};
+use std::{cmp::Eq, hash::Hash};
+
+use rustc_hash::FxHashMap;
 
 pub trait SubstContainer<Key, Substituted>
     where Key: Clone,
@@ -26,7 +28,7 @@ pub trait SubstContainer<Key, Substituted>
     }
 }
 
-impl<Key, Substituted> SubstContainer<Key, Substituted> for HashMap<Key, Substituted>
+impl<Key, Substituted> SubstContainer<Key, Substituted> for FxHashMap<Key, Substituted>
     where Key: Clone + Eq + Hash,
           Substituted: Clone
 {

@@ -1,13 +1,11 @@
 use std::{rc::Rc};
 
 use mset::MultiSet;
+use smallvec::SmallVec;
 
-use crate::{
-    ast::{ExprNode},
-    matcher::{Matcher},
-    parser::ExprManager};
+use crate::{ast::{ExprNode}, matcher::{Matcher}, parser::ExprManager};
 
-use super::{BaseExpr, Based, Wrong};
+use super::{Based, Wrong};
 
 
 
@@ -15,7 +13,6 @@ pub struct ProofChecker<'a>
 {
     schemes: Vec<Matcher>,
     hypothesis: &'a mset::MultiSet<ExprNode>,
-    manager: &'a ExprManager,
 }
 
 impl<'a> ProofChecker<'a>
@@ -36,44 +33,48 @@ impl<'a> ProofChecker<'a>
         ];
         let schemes = Self::into_matchers(manager, &schemes);
 
-        ProofChecker{ schemes, manager, hypothesis }
+        ProofChecker{ schemes, hypothesis }
     }
 
-    pub fn check_single_expr(&self, checked: &ExprNode) -> BaseExpr
+    pub fn check_single_expr(&self, checked: &ExprNode) -> Result<Based, Wrong>
     {
-        let proof = self.check_in_hypothesis(checked)
-            .or_else(|_| self.match_schemes(checked));
-        BaseExpr{ expr: Rc::clone(checked), proof }
+        self.check_in_hypothesis(checked)
+            .or_else(|_| self.match_schemes(checked))
     }
 
 //private:
-
     fn check_in_hypothesis(&self, checked: &ExprNode) -> Result<Based, Wrong>
     {
-        if self.hypothesis.contains(checked) {
-            Ok(Based::FromHyp)
-        } else {
-            Err(Wrong::Unproved)
-        }
+        self.hypothesis.get(checked)
+            .ok_or(Wrong::Unproved)
+            .map(|_| Based::FromHyp(Rc::clone(checked)))
     }
 
     fn match_schemes(&self, checked: &ExprNode) -> Result<Based, Wrong>
     {
-        match self.match_basic(checked, &self.schemes) {
-            Some(num) => Ok(Based::Scheme(num)),
-            None => Err(Wrong::Unproved),
-        }
+        self.match_basic(checked)
+            .ok_or(Wrong::Unproved)
+            .map(|(num, children)| Based::Scheme(num, children))
     }
 
 // proof checking
 
-    fn match_basic(&self, checked: &ExprNode, matchers: &[Matcher]) -> Option<u8>
+    fn match_basic(&self, checked: &ExprNode) -> Option<(u8, SmallVec<[ExprNode; 3]>)>
     {
-        let matched = Self::idx_of_pred(
-            matchers,
-            |matcher| matcher.match_expression(checked).is_ok());
+        self.schemes.iter()
+            .enumerate()
+            .find_map(|(idx, matcher)| {
+                matcher.match_expression(checked)
+                    .map_or(None, |substs| {
+                        let substs = substs.expr_substs();
+                        let mut children = SmallVec::new();
+                        for name in ["a", "b", "c"] {
+                            substs.get(name).map(|found| children.push(Rc::clone(found)));
+                        }
 
-        matched.map(|found| found as u8 + 1)
+                        Some((1 + idx as u8, children))
+                    })
+            })
     }
 
 // util
@@ -82,19 +83,5 @@ impl<'a> ProofChecker<'a>
         as_strs.iter()
             .map(|as_str| manager.matcher_str(*as_str))
             .collect()
-    }
-
-    fn idx_of_pred<T, Pred>(slice: &[T], pred: Pred) -> Option<usize>
-        where Pred: Fn(&T) -> bool
-    {
-        slice.iter()
-            .enumerate()
-            .find_map(|(idx, curr)| {
-                if pred(curr) {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
     }
 }

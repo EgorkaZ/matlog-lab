@@ -22,6 +22,9 @@ impl ExprManager
         Self::default()
     }
 
+    pub fn provider(&self) -> &'_ ExprProvider
+    { &self.expr_provider }
+
     pub fn parse(&self, str: &str) -> ExprNode
     {
         self.parser.parse(&self.expr_provider, str)

@@ -1,6 +1,5 @@
 use crate::ast;
 use ast::{ExprNode, ExprProvider};
-use std::marker::PhantomData;
 
 grammar(expr_provider: &ExprProvider);
 

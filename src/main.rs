@@ -1,18 +1,21 @@
 
 #[macro_use] extern crate lalrpop_util;
+#[macro_use] extern crate smallvec;
 
 pub mod ast;
 pub mod parser;
 pub mod matcher;
 pub mod tree;
 pub mod proof_check;
+pub mod natural_proof;
 
 
-use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Write}};
+use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader}};
 
-use proof_check::{Wrong, ProofChecker};
+use proof_check::{ProofChecker};
+use rustc_hash::FxHashMap;
 
-use crate::{parser::ExprManager, proof_check::{BaseExpr, check_rules}};
+use crate::{parser::ExprManager, proof_check::{check_rules}};
 
 fn get_reader() -> Box<dyn BufRead>
 {
@@ -35,25 +38,42 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let proof_checker = ProofChecker::new(&manager, &hypothesis);
 
-    let proof = reader.lines()
+    let expressions: Vec<_> = reader.lines()
         .map(|mb_line| mb_line.expect("I wanted this line soo much..."))
         .map(|line| manager.parse(&line))
-        .map(|expr| proof_checker.check_single_expr(&expr))
-        .fold(Vec::new(), |mut proved, BaseExpr{ expr, mut proof }| {
-            proof = proof.or_else(|_| check_rules(&expr, &proved));
-            proved.push(BaseExpr{ expr, proof });
-            proved
+        .collect();
+
+    match expressions.last() {
+        Some(last) if last == &proved => (/* ok */),
+        _ => {
+            println!("The proof does not proof the required expression");
+            return Ok(())
+        },
+    }
+
+    let proof_or_fst_wrong = expressions.into_iter()
+        .map(|expr| {
+            let proof = proof_checker.check_single_expr(&expr);
+            (expr, proof)
+        })
+        .enumerate()
+        .fold(Ok(FxHashMap::default()), |mb_proved, (num, (expr, proof))| {
+            mb_proved.and_then(|mut proved| {
+                proof
+                    .or_else(|_| check_rules(&expr, &proved))
+                    .map(move |base| {
+                        proved.insert(expr, base);
+                        proved
+                    })
+                    .map_err(|_| num + 1)
+            })
         });
 
-    proof.iter()
-        .enumerate()
-        .for_each(|(num, BaseExpr{ expr, proof })| {
-            let num = num + 1;
-            print!("{}: {} ", num, expr);
-            match proof {
-                Ok(base) => println!("[{}]", base),
-                Err(..) => println!("[Unproved]"),
-            }
-        });
+    match proof_or_fst_wrong {
+        Ok(_proofs) => (),
+        Err(first_wrong) => println!("The proof is incorrect at line {}", first_wrong),
+    }
+
+
     Ok(())
 }
