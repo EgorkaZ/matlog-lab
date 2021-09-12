@@ -190,6 +190,12 @@ impl ExprProvider
     }
 }
 
+impl Default for ExprProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 
 impl Display for UnOper
 {

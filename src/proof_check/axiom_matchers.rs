@@ -69,7 +69,9 @@ impl<'a> ProofChecker<'a>
                         let substs = substs.expr_substs();
                         let mut children = SmallVec::new();
                         for name in ["a", "b", "c"] {
-                            substs.get(name).map(|found| children.push(Rc::clone(found)));
+                            if let Some(found) = substs.get(name) {
+                                children.push(Rc::clone(found))
+                            }
                         }
 
                         Some((1 + idx as u8, children))

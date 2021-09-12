@@ -10,9 +10,9 @@ pub mod proof_check;
 pub mod natural_proof;
 
 
-use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, BufWriter, Write}, rc::{self, Rc}};
+use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, BufWriter, Write}, rc::{Rc}};
 
-use ast::{Expr, ExprBinOp, ExprNode};
+use ast::{ExprNode};
 use mset::MultiSet;
 use natural_proof::BaseNode;
 use proof_check::{ProofChecker};
