@@ -64,7 +64,7 @@ impl Expr
         Expr::dfs(&node)
             .filter_map(move |(curr, dir)| {
                 match &**curr {
-                    Expr::UnOp(UnOper::Any(var) | UnOper::Ext(var), ..) => {
+                    Expr::UnOp(UnOper::Any(var), ..) | Expr::UnOp(UnOper::Ext(var), ..) => {
                         if let DfsDir::In = dir {
                             bound.insert(var);
                         } else {
@@ -86,7 +86,7 @@ impl Expr
         Expr::dfs(node)
             .filter_map(|(curr, _)| {
                 match &**curr {
-                    Expr::UnOp(UnOper::Any(var) | UnOper::Ext(var), ..) => Some(var),
+                    Expr::UnOp(UnOper::Any(var), ..) | Expr::UnOp(UnOper::Ext(var), ..) => Some(var),
                     _ => None,
                 }
             })

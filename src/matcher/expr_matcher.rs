@@ -83,7 +83,7 @@ impl<'a> Matcher<'a>
         let var_subst = {
             use ExprUnOp::*;
             match &**expected {
-                UnOp(Any(TermVar::Static(name, ..)) | Ext(TermVar::Static(name, ..)), ..)
+                UnOp(Any(TermVar::Static(name, ..)), ..) | UnOp(Ext(TermVar::Static(name, ..)), ..)
                     if var_subst.is_named(*name) => &mut bound,
                 _ => var_subst
             }
