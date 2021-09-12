@@ -10,12 +10,15 @@ pub mod proof_check;
 pub mod natural_proof;
 
 
-use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader}};
+use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, BufWriter, Write}, rc::{self, Rc}};
 
+use ast::{Expr, ExprBinOp, ExprNode};
+use mset::MultiSet;
+use natural_proof::BaseNode;
 use proof_check::{ProofChecker};
 use rustc_hash::FxHashMap;
 
-use crate::{parser::ExprManager, proof_check::{check_rules}};
+use crate::{natural_proof::rebuild_to_natural, parser::ExprManager, proof_check::{check_rules}};
 
 fn get_reader() -> Box<dyn BufRead>
 {
@@ -28,6 +31,45 @@ fn get_reader() -> Box<dyn BufRead>
     }
 }
 
+fn print_nat_base_tree(writer: &mut impl Write, base: &BaseNode, hyp: &[ExprNode])
+{
+    let mut added_hyp = vec![];
+    print_nat_base_tree_dfs(writer, base, hyp, &mut added_hyp, 0)
+}
+
+fn print_hypothesis(writer: &mut impl Write, hyp: &[ExprNode])
+{
+    let mut iter = hyp.iter();
+    if let Some(first) = iter.next() {
+        write!(writer, "{}", first).unwrap();
+        iter.for_each(|curr| write!(writer, ", {}", curr).unwrap());
+    }
+}
+
+fn print_nat_base_tree_dfs(writer: &mut impl Write, base: &BaseNode, hyp: &[ExprNode], added_hyp: &mut Vec<ExprNode>, depth: u32)
+{
+    for (child, new_hyp) in base.children() {
+        if let Some(to_push) = new_hyp {
+            added_hyp.push(Rc::clone(to_push));
+        }
+        print_nat_base_tree_dfs(writer, child, hyp, added_hyp, depth + 1);
+        if new_hyp.is_some() {
+            added_hyp.pop();
+        }
+    }
+
+    write!(writer, "[{}] ", depth).unwrap();
+    print_hypothesis(writer, hyp);
+    if !added_hyp.is_empty() {
+        write!(writer, ", ").unwrap();
+        print_hypothesis(writer, added_hyp);
+    }
+    if !(added_hyp.is_empty() && hyp.is_empty()) {
+        write!(writer, " ").unwrap();
+    }
+    writeln!(writer, "|- {} [{}]", base.curr(), base.shift()).unwrap();
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let manager = ExprManager::new();
     let mut reader = get_reader();
@@ -36,7 +78,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     reader.read_line(&mut to_prove).expect("I wanted to read this line so hard...");
     let (hypothesis, proved) = manager.parse_proved(&to_prove);
 
-    let proof_checker = ProofChecker::new(&manager, &hypothesis);
+    let hypothesis_set = hypothesis.iter()
+        .fold(Default::default(), |mut set: MultiSet<_>, expr| {
+            set.insert(Rc::clone(expr));
+            set
+        });
+    let proof_checker = ProofChecker::new(&manager, &hypothesis_set);
 
     let expressions: Vec<_> = reader.lines()
         .map(|mb_line| mb_line.expect("I wanted this line soo much..."))
@@ -48,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         _ => {
             println!("The proof does not proof the required expression");
             return Ok(())
-        },
+        }
     }
 
     let proof_or_fst_wrong = expressions.into_iter()
@@ -69,9 +116,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             })
         });
 
+    let stdout = io::stdout();
+    let mut writer = BufWriter::new(stdout.lock());
+
     match proof_or_fst_wrong {
-        Ok(_proofs) => (),
-        Err(first_wrong) => println!("The proof is incorrect at line {}", first_wrong),
+        Ok(proofs) => {
+            let natural_proof = rebuild_to_natural(&proofs, manager.provider(), &proved);
+            print_nat_base_tree(&mut writer, &natural_proof, &hypothesis);
+        },
+        Err(first_wrong) => writeln!(writer, "The proof is incorrect at line {}", first_wrong).unwrap(),
     }
 
 

@@ -31,12 +31,10 @@ impl ExprManager
             .unwrap_or_else(|parse_err| panic!("I tried to parse: '{}' and failed. Error: {}", str, parse_err))
     }
 
-    pub fn parse_proved(&self, str: &str) -> (mset::MultiSet<ExprNode>, ExprNode)
+    pub fn parse_proved(&self, str: &str) -> (Vec<ExprNode>, ExprNode)
     {
-        let (hypothesis, expr) = ProvedParser::new().parse(&self.expr_provider, str)
-            .unwrap_or_else(|parse_err| panic!("I tried to parse: '{}' and failed. Error: {}", str, parse_err));
-        let hypothesis = hypothesis.into_iter().collect();
-        (hypothesis, expr)
+        ProvedParser::new().parse(&self.expr_provider, str)
+            .unwrap_or_else(|parse_err| panic!("I tried to parse: '{}' and failed. Error: {}", str, parse_err))
     }
 
     pub fn matcher_str(&self, matcher: &str) -> Matcher

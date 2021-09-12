@@ -2,7 +2,7 @@ use std::{cell::RefCell, fmt::{Display, Write}, hash::Hash, ptr, rc::Rc};
 
 use rustc_hash::FxHashSet;
 
-use crate::tree::{ChildrenIter, Tree};
+use crate::tree::{ChildrenIter, NodeProvider, Tree};
 
 use super::{node_provider::{OperNode, OperNodeProvider}};
 
@@ -44,6 +44,7 @@ pub enum Expr
     Variable(ExprVar),
     UnOp(UnOper, ExprNode),
     BiOp(BinOper, ExprNode, ExprNode),
+    Bottom
 }
 
 pub type ExprNode = Rc<Expr>;
@@ -69,6 +70,9 @@ impl Hash for Expr
                 ptr::hash(Rc::as_ptr(l), state);
                 ptr::hash(Rc::as_ptr(r), state)
             },
+            Bottom => {
+                state.write_u8(3);
+            },
         }
     }
 }
@@ -91,6 +95,7 @@ impl PartialEq for Expr
                     Rc::ptr_eq(l_l, r_l) &&
                     Rc::ptr_eq(l_r, r_r)
             },
+            (Bottom, Bottom) => true,
             _ => false
         }
     }
@@ -131,7 +136,7 @@ pub struct ExprProvider
     saved: RefCell<FxHashSet<ExprNode>>,
 }
 
-impl OperNodeProvider for ExprProvider
+impl NodeProvider for ExprProvider
 {
     type Node = Expr;
 
@@ -139,6 +144,8 @@ impl OperNodeProvider for ExprProvider
         self.saved.borrow_mut()
     }
 }
+
+impl OperNodeProvider for ExprProvider {}
 
 impl ExprProvider
 {
@@ -164,7 +171,7 @@ impl ExprProvider
 
     pub fn neg(&self, sub: &ExprNode) -> ExprNode
     {
-        self.un_op(UnOper::Neg, sub)
+        self.imp(sub, &self.bott())
     }
 
     pub fn var(&self, name: &str) -> ExprNode
@@ -175,6 +182,11 @@ impl ExprProvider
     pub fn meta(&self, name: &str) -> ExprNode
     {
         self.get_or_insert(Expr::Variable(ExprVar::Meta(name.into())))
+    }
+
+    pub fn bott(&self) -> ExprNode
+    {
+        self.get_or_insert(Expr::Bottom)
     }
 }
 
@@ -212,6 +224,7 @@ impl Display for Expr
             Variable(name) => name.fmt(f),
             UnOp(op, sub) => f.write_fmt(format_args!("({}{})", op, sub)),
             BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
+            Bottom => f.write_str("_|_"),
         }
     }
 }

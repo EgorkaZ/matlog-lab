@@ -1,9 +1,9 @@
-use std::{cell::RefCell, fmt::Display, hash::Hash, ptr, rc::{self, Rc}};
+use std::{cell::RefCell, fmt::Display, hash::Hash, ptr, rc::{Rc}};
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashSet};
 use smallvec::SmallVec;
 
-use crate::{ast::{ExprNode, node_provider::OperNodeProvider}, tree::NodeProvider};
+use crate::{ast::{ExprNode}, tree::NodeProvider};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum NodeKind
@@ -68,12 +68,23 @@ impl Display for NodeKind
 pub struct Based
 {
     kind: NodeKind,
-    children: SmallVec<[Rc<Based>; 3]>,
+    children: SmallVec<[(BaseNode, Option<ExprNode>); 3]>,
     current: ExprNode,
-    new_hyp: Option<ExprNode>,
 }
 
 pub type BaseNode = Rc<Based>;
+
+impl Based
+{
+    pub fn curr(&self) -> &ExprNode
+    { &self.current }
+
+    pub fn children(&self) -> &[(BaseNode, Option<ExprNode>)]
+    { &self.children }
+
+    pub fn shift(&self) -> &'static str
+    { From::from(&self.kind) }
+}
 
 impl PartialEq for Based
 {
@@ -88,8 +99,8 @@ impl PartialEq for Based
 
         self.children.iter()
             .zip(other.children.iter())
-            .all(|(l, r)| {
-                Rc::ptr_eq(l, r)
+            .all(|((l_base, l_hyp), (r_base, r_hyp))| {
+                Rc::ptr_eq(l_base, r_base) && l_hyp == r_hyp
             })
     }
 }
@@ -100,7 +111,10 @@ impl Hash for Based
         self.kind.hash(state);
         self.current.hash(state);
         self.children.iter()
-            .for_each(|child| ptr::hash(Rc::as_ptr(child), state))
+            .for_each(|(child, hyp)| {
+                hyp.hash(state);
+                ptr::hash(Rc::as_ptr(child), state)
+            })
     }
 }
 
@@ -115,18 +129,17 @@ impl BaseProvider
     pub fn provide(
         &self,
         kind: &'static str,
-        children: SmallVec<[BaseNode; 3]>,
-        current: ExprNode,
-        new_hyp: Option<ExprNode>) -> BaseNode
+        children: SmallVec<[(BaseNode, Option<ExprNode>); 3]>,
+        current: ExprNode) -> BaseNode
     {
         let kind = kind.into();
-        self.get_or_insert(Based{ kind, children, current, new_hyp })
+        self.get_or_insert(Based{ kind, children, current })
     }
 }
 
 impl NodeProvider for BaseProvider
 {
-    type Node = BaseNode;
+    type Node = Based;
 
     fn node_set(&self) -> std::cell::RefMut<'_, FxHashSet<Rc<Self::Node>>> {
         self.cached.borrow_mut()
