@@ -42,7 +42,7 @@ fn print_hypothesis(writer: &mut impl Write, hyp: &[ExprNode])
     let mut iter = hyp.iter();
     if let Some(first) = iter.next() {
         write!(writer, "{}", first).unwrap();
-        iter.for_each(|curr| write!(writer, ", {}", curr).unwrap());
+        iter.for_each(|curr| write!(writer, ",{}", curr).unwrap());
     }
 }
 
@@ -58,15 +58,14 @@ fn print_nat_base_tree_dfs(writer: &mut impl Write, base: &BaseNode, hyp: &[Expr
         }
     }
 
+    let neither_is_empty = !(hyp.is_empty() || added_hyp.is_empty());
+
     write!(writer, "[{}] ", depth).unwrap();
     print_hypothesis(writer, hyp);
-    if !added_hyp.is_empty() {
+    if neither_is_empty {
         write!(writer, ", ").unwrap();
-        print_hypothesis(writer, added_hyp);
     }
-    if !(added_hyp.is_empty() && hyp.is_empty()) {
-        write!(writer, " ").unwrap();
-    }
+    print_hypothesis(writer, added_hyp);
     writeln!(writer, "|- {} [{}]", base.curr(), base.shift()).unwrap();
 }
 
