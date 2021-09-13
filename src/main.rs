@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let stdout = io::stdout();
         let mut out_lock = stdout.lock();
 
-        write!(out_lock, "{}", to_prove).unwrap();
+        writeln!(out_lock, "|-{}", proved).unwrap();
         let last = line_proofs.pop();
         let first_wrong = {
             line_proofs.iter()
@@ -82,17 +82,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         if let Some((num, error)) = first_wrong {
             print_error(num, error);
-        } else {
-            if let Some(BaseExpr{ expr, proof }) = last {
-                let num = line_proofs.len() + 1;
-                match proof {
-                    Ok(base) if proved == expr => writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap(),
-                    Err(error) => print_error(num, &error),
-                    _ => writeln!(out_lock, "The proof proves different expression.").unwrap(),
-                }
-            } else {
-                writeln!(out_lock, "The proof proves different expression.").unwrap();
+        } else if let Some(BaseExpr{ expr, proof }) = last {
+            let num = line_proofs.len() + 1;
+            match proof {
+                Ok(base) if proved == expr => writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap(),
+                Err(error) => print_error(num, &error),
+                _ => writeln!(out_lock, "The proof proves different expression.").unwrap(),
             }
+        } else {
+            writeln!(out_lock, "The proof proves different expression.").unwrap();
         }
     }
     Ok(())
