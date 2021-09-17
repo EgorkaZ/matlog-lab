@@ -1,4 +1,4 @@
-use std::{ops::BitAnd, rc::Rc};
+use std::{fmt::Display, ops::BitAnd, rc::Rc};
 
 use crate::{
     ast::{ExprNode, Term, TermVar, TermUnOp},
@@ -38,14 +38,14 @@ impl<'a> ProofChecker<'a>
         let schemes = Self::into_matchers(manager, &schemes);
 
         let axioms = [
-            "a:Var = b:Var -> (a:Var)' = (b:Var)'",
-            "a:Var = b:Var -> a:Var = c:Var -> b:Var = c:Var",
-            "(a:Var)' = (b:Var)' -> a:Var = b:Var",
-            "!(a:Var)' = 0",
-            "a:Var + (b:Var)' = (a:Var + b:Var)'",
-            "a:Var + 0 = a:Var",
-            "a:Var * 0 = 0",
-            "a:Var * (b:Var)' = a:Var * b:Var + a:Var",
+            "a = b -> a' = b'",
+            "a = b -> a = c -> b = c",
+            "a' = b' -> a = b",
+            "!a' = 0",
+            "a + b' = (a + b)'",
+            "a + 0 = a",
+            "a * 0 = 0",
+            "a * b' = a * b + a",
 
             "(zeroed:Pred) & (@x:Var.orig:Pred -> (nexted:Pred)) -> orig:Pred",
         ];
@@ -99,23 +99,32 @@ impl<'a> ProofChecker<'a>
                 matcher.match_expression(checked)
                     .map_err(|_mismatch| Wrong::Unproved)
                     .and_then(|substs| {
-                        let quan_var = substs.var_mapping().get_subst(&"x".into()).unwrap();
+                        let x_key: String = "x".into();
+                        let orig_key: String = "orig".into();
+                        let substed_key: String = "substed".into();
+                        let quan_var = substs.var_mapping().get_subst(&x_key)
+                            .unwrap_or_else(|| panic_on_match_failure(&substs, &x_key));
 
                         let expr_substs = substs.expr_substs();
-                        let orig = expr_substs.get_subst(&"orig".into()).unwrap();
-                        let substed = expr_substs.get_subst(&"substed".into()).unwrap();
+                        let orig = expr_substs.get_subst(&orig_key)
+                            .unwrap_or_else(|| panic_on_match_failure(&substs, &orig_key));
+                        let substed = expr_substs.get_subst(&substed_key)
+                            .unwrap_or_else(|| panic_on_match_failure(&substs, &substed_key));
 
                         let orig_matcher = self.manager.matcher_node(Rc::clone(orig));
 
                         let check_freedom_for_subst = |substs: Substitutions| {
-                            let substed_term = substs.var_subst().get_subst(quan_var).unwrap();
-                            let free_vars = Matcher::all_vars(substed_term);
-                            if !(Matcher::all_bound_at_var_mention(orig, *quan_var).bitand(&free_vars)).is_empty() {
-                                let rule = if idx == 0 { QuanRule::Any } else { QuanRule::Exist };
-                                Err(Wrong::NonFreeToSubst{ var: *quan_var, substed: Rc::clone(substed_term), rule })
-                            } else {
-                                Ok(Based::Scheme(11 + idx as u8))
-                            }
+                            let based = Based::Scheme(11 + idx as u8);
+                            substs.var_subst().get_subst(quan_var)
+                                .map_or(Ok(based), |substed_term| {
+                                    let free_vars = Matcher::all_vars(substed_term);
+                                    if !(Matcher::all_bound_at_var_mention(orig, *quan_var).bitand(&free_vars)).is_empty() {
+                                        let rule = if idx == 0 { QuanRule::Any } else { QuanRule::Exist };
+                                        Err(Wrong::NonFreeToSubst{ var: *quan_var, substed: Rc::clone(substed_term), rule })
+                                    } else {
+                                        Ok(Based::Scheme(11 + idx as u8))
+                                    }
+                                })
                         };
 
                         orig_matcher.match_expr_free_var_subst(substed, *quan_var)
@@ -138,18 +147,28 @@ impl<'a> ProofChecker<'a>
             .match_expression(checked)
             .map_err(|_| Wrong::Unproved)
             .and_then(|substs| {
-                let quan_var = substs.var_mapping().get_subst(&"x".into()).unwrap();
+                let x_key = "x".into();
+                let orig_key = "orig".into();
+                let zeroed_key = "zeroed".into();
+                let nexted_key = "nexted".into();
+
+                let quan_var = substs.var_mapping().get_subst(&x_key)
+                    .unwrap_or_else(|| panic_on_match_failure(&substs, &x_key));
 
                 let expr_substs = substs.expr_substs();
-                let orig = expr_substs.get_subst(&"orig".into()).unwrap();
-                let zeroed = expr_substs.get_subst(&"zeroed".into()).unwrap();
-                let nexted = expr_substs.get_subst(&"nexted".into()).unwrap();
+                let orig = expr_substs.get_subst(&orig_key)
+                    .unwrap_or_else(|| panic_on_match_failure(&substs, &orig_key));
+                let zeroed = expr_substs.get_subst(&zeroed_key)
+                    .unwrap_or_else(|| panic_on_match_failure(&substs, &zeroed_key));
+                let nexted = expr_substs.get_subst(&nexted_key)
+                    .unwrap_or_else(|| panic_on_match_failure(&substs, &nexted_key));
 
                 let orig_matcher = self.manager.matcher_node(Rc::clone(orig));
 
                 let zeroed = orig_matcher.match_expr_free_var_subst(zeroed, *quan_var)
                     .validate(|match_res| match_res.map_or(false, |subst| {
-                        matches!(**subst.var_subst().get_subst(quan_var).unwrap(), Term::Zero)
+                        subst.var_subst().get_subst(quan_var)
+                            .map_or(true, |substed_term| matches!(**substed_term, Term::Zero))
                     }));
 
                 let nexted = orig_matcher.match_expr_free_var_subst(nexted, *quan_var)
@@ -157,13 +176,15 @@ impl<'a> ProofChecker<'a>
                         use Term::{UnOp, Var};
                         use TermUnOp::Next;
 
-                        let var_subst = subst.var_subst().get_subst(quan_var).unwrap();
-                        if let UnOp(Next, sub) = &**var_subst {
-                            if let Var(TermVar::Static(sub_var_name, ..)) = &**sub {
-                                return sub_var_name == quan_var
-                            }
-                        }
-                        false
+                        subst.var_subst().get_subst(quan_var)
+                            .map_or(true, |var_subst| {
+                                if let UnOp(Next, sub) = &**var_subst {
+                                    if let Var(TermVar::Static(sub_var_name, ..)) = &**sub {
+                                        return sub_var_name == quan_var
+                                    }
+                                }
+                                false
+                            })
                     }));
 
                 if zeroed && nexted {
@@ -196,4 +217,9 @@ impl<'a> ProofChecker<'a>
                 }
             })
     }
+}
+
+fn panic_on_match_failure<Key: Display, Ret>(subst: &Substitutions, key: &Key) -> Ret
+{
+    panic!("get_subst('{}').unwrap() failed. Substitutions: {}", key, subst);
 }

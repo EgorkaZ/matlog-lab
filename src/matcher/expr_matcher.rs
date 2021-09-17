@@ -1,4 +1,4 @@
-use std::{collections::{BTreeSet, HashMap}, fmt::Display, hash::Hash, rc::Rc};
+use std::{collections::{BTreeSet, HashMap}, fmt::{Display}, hash::Hash, rc::Rc};
 
 use crate::{ast::{Expr, ExprNode, ExprPred, ExprUnOp, Term, TermNode, TermVar, term::{TermProvider}}, tree::Tree};
 
@@ -229,6 +229,24 @@ impl Substitutions
     { &self.var }
 }
 
+impl Display for Substitutions
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Var substs: {")
+            .and_then(|_| self.vars.iter()
+                .fold(Ok(()), |acc, (meta_name, var_name)| {
+                    acc.and_then(|_| f.write_fmt(format_args!("({}: {}) ", meta_name, var_name)))
+                }))
+            .and_then(|_| f.write_str("}, Expr substs: {"))
+            .and_then(|_| self.exprs.iter()
+                .fold(Ok(()), |acc, (meta_name, expr)| {
+                    acc.and_then(|_| f.write_fmt(format_args!("({}: {})", meta_name, expr)))
+                }))
+            .and_then(|_| f.write_fmt(format_args!("}}, Var subst: {}", self.var)))
+
+    }
+}
+
 #[derive(Debug)]
 pub enum Mismatch
 {
@@ -279,6 +297,16 @@ impl VarSubst
         match &self {
             Self::Free{ name: actual_name, .. } => name == *actual_name,
             Self::Bound => false,
+        }
+    }
+}
+
+impl Display for VarSubst
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bound => f.write_str("(Not free)"),
+            Self::Free{ name, subst} => f.write_fmt(format_args!("({}: {:?})", name, subst)),
         }
     }
 }
