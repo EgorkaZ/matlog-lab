@@ -123,7 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let natural_proof = rebuild_to_natural(&proofs, manager.provider(), &proved);
             print_nat_base_tree(&mut writer, &natural_proof, &hypothesis);
         },
-        Err(first_wrong) => writeln!(writer, "The proof is incorrect at line {}", first_wrong).unwrap(),
+        Err(first_wrong) => writeln!(writer, "Proof is incorrect at line {}", first_wrong + 1).unwrap(),
     }
 
 
