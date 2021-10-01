@@ -249,7 +249,7 @@ impl AxiomRebuild for AxiomRebuilder<8>
 
         let a_c = rebuilder.expr_provider.imp(a, c);
         let a_c_base = rebuilder.base_provider.provide(
-            "Ax", smallvec![], a_c);
+            "Ax", smallvec![], Rc::clone(&a_c));
 
         let a_base = rebuilder.base_provider.provide(
             "Ax", smallvec![], Rc::clone(a));
@@ -259,7 +259,7 @@ impl AxiomRebuild for AxiomRebuilder<8>
 
         let b_c = rebuilder.expr_provider.imp(b, c);
         let b_c_base = rebuilder.base_provider.provide(
-            "Ax", smallvec![], b_c);
+            "Ax", smallvec![], Rc::clone(&b_c));
 
         let b_base = rebuilder.base_provider.provide(
             "Ax", smallvec![], Rc::clone(b));
@@ -281,15 +281,13 @@ impl AxiomRebuild for AxiomRebuilder<8>
         let if_else_base = rebuilder.base_provider.provide(
             "I->", smallvec![(c_from_any_base, Some(Rc::clone(&a_or_b)))], if_else);
 
-        let a_c = rebuilder.expr_provider.imp(a, c);
-        let a_c__if_else = rebuilder.expr_provider.imp(&a_c, if_else_base.curr());
-        let a_c__if_else_base = rebuilder.base_provider.provide(
-            "I->", smallvec![(if_else_base, Some(a_c))], a_c__if_else);
+        let b_c__if_else = rebuilder.expr_provider.imp(&b_c, if_else_base.curr());
+        let b_c__if_else_base = rebuilder.base_provider.provide(
+            "I->", smallvec![(if_else_base, Some(b_c))], b_c__if_else);
 
-        let a_b = rebuilder.expr_provider.imp(a, b);
-        let res = rebuilder.expr_provider.imp(&a_b, a_c__if_else_base.curr());
+        let res = rebuilder.expr_provider.imp(&a_c, b_c__if_else_base.curr());
         let res_base = rebuilder.base_provider.provide(
-            "I->", smallvec![(a_c__if_else_base, Some(a_b))], res);
+            "I->", smallvec![(b_c__if_else_base, Some(a_c))], res);
 
         res_base
     }
