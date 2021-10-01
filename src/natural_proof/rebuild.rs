@@ -247,15 +247,15 @@ impl AxiomRebuild for AxiomRebuilder<8>
     fn rebuild_axiom(rebuilder: &ProofRebuilder, used: &[ExprNode]) -> BaseNode {
         let (a, b, c) = (&used[0], &used[1], &used[2]);
 
-        let a_b = rebuilder.expr_provider.imp(a, b);
-        let a_b_base = rebuilder.base_provider.provide(
-            "Ax", smallvec![], a_b);
+        let a_c = rebuilder.expr_provider.imp(a, c);
+        let a_c_base = rebuilder.base_provider.provide(
+            "Ax", smallvec![], a_c);
 
         let a_base = rebuilder.base_provider.provide(
             "Ax", smallvec![], Rc::clone(a));
 
         let c_from_a_base = rebuilder.base_provider.provide(
-            "E->", smallvec![(a_b_base, None), (a_base, None)], Rc::clone(c));
+            "E->", smallvec![(a_c_base, None), (a_base, None)], Rc::clone(c));
 
         let b_c = rebuilder.expr_provider.imp(b, c);
         let b_c_base = rebuilder.base_provider.provide(
