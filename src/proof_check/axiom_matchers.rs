@@ -68,8 +68,8 @@ impl<'a> ProofChecker<'a>
                     .map_or(None, |substs| {
                         let substs = substs.expr_substs();
                         let mut children = SmallVec::new();
-                        for name in ["a", "b", "c"] {
-                            if let Some(found) = substs.get(name) {
+                        for name in &["a", "b", "c"] {
+                            if let Some(found) = substs.get(*name) {
                                 children.push(Rc::clone(found))
                             }
                         }
