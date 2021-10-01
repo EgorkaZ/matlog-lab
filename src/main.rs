@@ -10,7 +10,7 @@ pub mod proof_check;
 
 use std::{env::args, error::Error, fs::File, io::{self, BufRead, BufReader, Write}};
 
-use proof_check::{ProofChecker};
+use proof_check::{ProofChecker, Wrong};
 
 use crate::{parser::ExprManager, proof_check::{BaseExpr, check_rules}};
 
@@ -74,13 +74,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 writeln!(out_lock, "[{}. {}] {}", num, base, expr).unwrap();
             });
 
-        let (last, _) = bases.last()
-            .unwrap_or_else(|| panic!("Empty proof proves nothing."));
-
         if let Some(err) = fst_wrong {
-            writeln!(out_lock, "Expression {}: {}.", bases.len() + 1, err).unwrap();
-        } else if *last != &proved {
-            writeln!(out_lock, "The proof proves different expression.").unwrap();
+            write!(out_lock, "Expression {}", bases.len() + 1)
+                .and_then(|()| if matches!(err, Wrong::Unproved) {
+                    write!(out_lock, " ")
+                } else {
+                    write!(out_lock, ": ")
+                })
+                .and_then(|()| writeln!(out_lock, "{}.", err))
+                .unwrap();
+        } else {
+            let (last, _) = bases.last()
+                .unwrap_or_else(|| panic!("Empty proof proves nothing."));
+            if *last != &proved {
+                writeln!(out_lock, "The proof proves different expression.").unwrap();
+            }
         }
     }
     Ok(())
