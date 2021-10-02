@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let stdout = io::stdout();
         let mut out_lock = stdout.lock();
 
-        writeln!(out_lock, "|-{}", proved).unwrap();
+        writeln!(out_lock, "|-{}", proved)?;
         bases.iter()
             .enumerate()
             .for_each(|(num, (expr, base))| {
@@ -81,13 +81,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 } else {
                     write!(out_lock, ": ")
                 })
-                .and_then(|()| writeln!(out_lock, "{}.", err))
-                .unwrap();
+                .and_then(|()| writeln!(out_lock, "{}.", err))?;
         } else {
             let (last, _) = bases.last()
                 .unwrap_or_else(|| panic!("Empty proof proves nothing."));
             if *last != &proved {
-                writeln!(out_lock, "The proof proves different expression.").unwrap();
+                writeln!(out_lock, "The proof proves different expression.")?;
             }
         }
     }
