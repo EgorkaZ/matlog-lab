@@ -32,10 +32,9 @@ impl<'a> Matcher<'a>
     {
         let mut res = BTreeSet::new();
         Self::for_each_term_vars(checked, |curr_bound, term_vars| {
-            let mut curr_free = term_vars.into_iter()
-                .filter(|var| !curr_bound.contains(var))
-                .collect();
-            res.append(&mut curr_free);
+            let curr_free = term_vars.into_iter()
+                .filter(|var| !curr_bound.contains(var));
+            res.extend(curr_free);
         });
         res
     }
