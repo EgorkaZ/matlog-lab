@@ -130,7 +130,7 @@ fn check_rule_detail(
                 if !free_vars.contains(&var) {
                     Ok(Based::Rule{ orig: idx + 1, rule })
                 } else {
-                    Err(prev_err.min(Wrong::FreeVarInRule{ var, rule: QuanRule::Exist }))
+                    Err(prev_err.min(Wrong::FreeVarInRule{ var, rule }))
                 }
             })
         })

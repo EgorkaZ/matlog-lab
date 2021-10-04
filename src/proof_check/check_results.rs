@@ -154,7 +154,7 @@ mod tests {
         let non_free_any_b = NonFreeToSubst{ var: 'b', rule: Any, substed: some_term.clone() };
 
         let non_free_ext_c = NonFreeToSubst{ var: 'c', rule: Exist, substed: some_term.clone() };
-        let non_free_ext_d = NonFreeToSubst{ var: 'd', rule: Exist, substed: some_term.clone() };
+        let non_free_ext_d = NonFreeToSubst{ var: 'd', rule: Exist, substed: some_term };
 
         let free_ext_e = FreeVarInRule{ var: 'e', rule: Exist };
         let free_ext_g = FreeVarInRule{ var: 'g', rule: Exist };
