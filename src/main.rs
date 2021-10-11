@@ -31,28 +31,37 @@ fn get_reader() -> Box<dyn BufRead>
     }
 }
 
-fn print_nat_base_tree(writer: &mut impl Write, base: &BaseNode, hyp: &[ExprNode])
+fn print_nat_base_tree(
+    writer: &mut impl Write,
+    base: &BaseNode,
+    hyp: &[ExprNode]) -> Result<(), io::Error>
 {
     let mut added_hyp = vec![];
     print_nat_base_tree_dfs(writer, base, hyp, &mut added_hyp, 0)
 }
 
-fn print_hypothesis(writer: &mut impl Write, hyp: &[ExprNode])
+fn print_hypothesis(writer: &mut impl Write, hyp: &[ExprNode]) -> Result<(), io::Error>
 {
     let mut iter = hyp.iter();
     if let Some(first) = iter.next() {
-        write!(writer, "{}", first).unwrap();
+        write!(writer, "{}", first)?;
         iter.for_each(|curr| write!(writer, ",{}", curr).unwrap());
     }
+    Ok(())
 }
 
-fn print_nat_base_tree_dfs(writer: &mut impl Write, base: &BaseNode, hyp: &[ExprNode], added_hyp: &mut Vec<ExprNode>, depth: u32)
+fn print_nat_base_tree_dfs(
+    writer: &mut impl Write,
+    base: &BaseNode,
+    hyp: &[ExprNode],
+    added_hyp: &mut Vec<ExprNode>,
+    depth: u32) -> Result<(), io::Error>
 {
     for (child, new_hyp) in base.children() {
         if let Some(to_push) = new_hyp {
             added_hyp.push(Rc::clone(to_push));
         }
-        print_nat_base_tree_dfs(writer, child, hyp, added_hyp, depth + 1);
+        print_nat_base_tree_dfs(writer, child, hyp, added_hyp, depth + 1)?;
         if new_hyp.is_some() {
             added_hyp.pop();
         }
@@ -60,13 +69,14 @@ fn print_nat_base_tree_dfs(writer: &mut impl Write, base: &BaseNode, hyp: &[Expr
 
     let neither_is_empty = !(hyp.is_empty() || added_hyp.is_empty());
 
-    write!(writer, "[{}] ", depth).unwrap();
-    print_hypothesis(writer, hyp);
+    write!(writer, "[{}] ", depth)?;
+    print_hypothesis(writer, hyp)?;
     if neither_is_empty {
-        write!(writer, ", ").unwrap();
+        write!(writer, ", ")?;
     }
-    print_hypothesis(writer, added_hyp);
-    writeln!(writer, "|- {} [{}]", base.curr(), base.shift()).unwrap();
+    print_hypothesis(writer, added_hyp)?;
+    writeln!(writer, "|- {} [{}]", base.curr(), base.shift())?;
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -121,9 +131,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     match proof_or_fst_wrong {
         Ok(proofs) => {
             let natural_proof = rebuild_to_natural(&proofs, manager.provider(), &proved);
-            print_nat_base_tree(&mut writer, &natural_proof, &hypothesis);
+            print_nat_base_tree(&mut writer, &natural_proof, &hypothesis)?;
         },
-        Err(first_wrong) => writeln!(writer, "Proof is incorrect at line {}", first_wrong + 1).unwrap(),
+        Err(first_wrong) => writeln!(writer, "Proof is incorrect at line {}", first_wrong + 1)?,
     }
 
 
