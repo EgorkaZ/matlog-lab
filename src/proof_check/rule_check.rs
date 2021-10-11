@@ -13,6 +13,10 @@ pub fn check_rules(checked: &ExprNode, previous: &FxHashMap<ExprNode, Based>) ->
 
 fn check_modus_ponens(checked: &ExprNode, previous: &FxHashMap<ExprNode, Based>) -> Result<Based, Wrong>
 {
+    if let Some(proved_base) = previous.get(checked) {
+        return Ok(proved_base.clone())
+    }
+
     previous.iter()
         .map(|(expr,..)| expr)
         .find_map(|imp| {
