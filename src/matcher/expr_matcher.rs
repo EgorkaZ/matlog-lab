@@ -48,6 +48,9 @@ impl Matcher
             (BiOp(l_op, l_l, l_r), BiOp(r_op, r_l, r_r)) if l_op == r_op => {
                 self.match_exprs(l_l, r_l, expr_substs)
                     .and_then(|_| self.match_exprs(l_r, r_r, expr_substs))
+            },
+            (Bottom, Bottom) => {
+                Ok(())
             }
             _ => Err(Mismatch::Expr{ expected: Rc::clone(expected), actual: Rc::clone(checked) }),
         }
