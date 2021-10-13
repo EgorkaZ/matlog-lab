@@ -228,7 +228,7 @@ impl AxiomRebuild for AxiomRebuilder<7>
         let (a, b) = (&used[0], &used[1]);
 
         let b_base = rebuilder.base_provider.provide(
-            "Ax", smallvec![], Rc::clone(a));
+            "Ax", smallvec![], Rc::clone(b));
 
         let a_b = rebuilder.expr_provider.disj(a, b);
         let a_b_base = rebuilder.base_provider.provide(
