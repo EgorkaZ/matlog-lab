@@ -45,7 +45,7 @@ Variable: ExprNode = {
 };
 
 StaticVar: &'input str = {
-    r"[A-Z][A-Z0-9']*",
+    r"[A-Z][A-Z0-9'’]*",
 }
 
 MetaVar: &'input str = {
