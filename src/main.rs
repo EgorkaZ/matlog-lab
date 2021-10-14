@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match expressions.last() {
         Some(last) if last == &proved => (/* ok */),
         _ => {
-            println!("The proof does not proof the required expression");
+            println!("The proof does not prove the required expression");
             return Ok(())
         }
     }

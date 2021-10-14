@@ -141,46 +141,6 @@ impl AxiomRebuild for AxiomRebuilder<3>
     fn rebuild_axiom(rebuilder: &ProofRebuilder, used: &[ExprNode]) -> BaseNode {
         let (a, b) = (&used[0], &used[1]);
 
-        let a_b = rebuilder.expr_provider.conj(a, b);
-        let a_b_base = rebuilder.base_provider.provide(
-            "Ax", smallvec![], Rc::clone(&a_b));
-
-        let a_base = rebuilder.base_provider.provide(
-            "El&", smallvec![(a_b_base, None)], Rc::clone(a));
-
-        let a_b__a = rebuilder.expr_provider.imp(&a_b, a);
-        let a_b__a_base = rebuilder.base_provider.provide(
-            "I->", smallvec![(a_base, Some(a_b))], a_b__a);
-
-        a_b__a_base
-    }
-}
-
-impl AxiomRebuild for AxiomRebuilder<4>
-{
-    fn rebuild_axiom(rebuilder: &ProofRebuilder, used: &[ExprNode]) -> BaseNode {
-        let (a, b) = (&used[0], &used[1]);
-
-        let a_b = rebuilder.expr_provider.conj(a, b);
-        let a_b_base = rebuilder.base_provider.provide(
-            "Ax", smallvec![], Rc::clone(&a_b));
-
-        let b_base = rebuilder.base_provider.provide(
-            "Er&", smallvec![(a_b_base, None)], Rc::clone(b));
-
-        let a_b__b = rebuilder.expr_provider.imp(&a_b, b);
-        let a_b__b_base = rebuilder.base_provider.provide(
-            "I->", smallvec![(b_base, Some(a_b))], a_b__b);
-
-        a_b__b_base
-    }
-}
-
-impl AxiomRebuild for AxiomRebuilder<5>
-{
-    fn rebuild_axiom(rebuilder: &ProofRebuilder, used: &[ExprNode]) -> BaseNode {
-        let (a, b) = (&used[0], &used[1]);
-
         let a_base = rebuilder.base_provider.provide(
             "Ax", smallvec![], Rc::clone(a));
         let b_base = rebuilder.base_provider.provide(
@@ -199,6 +159,46 @@ impl AxiomRebuild for AxiomRebuilder<5>
             "I->", smallvec![(b__a_b_base, Some(Rc::clone(a)))], a__b__a_b);
 
         a__b__a_b_base
+    }
+}
+
+impl AxiomRebuild for AxiomRebuilder<4>
+{
+    fn rebuild_axiom(rebuilder: &ProofRebuilder, used: &[ExprNode]) -> BaseNode {
+        let (a, b) = (&used[0], &used[1]);
+
+        let a_b = rebuilder.expr_provider.conj(a, b);
+        let a_b_base = rebuilder.base_provider.provide(
+            "Ax", smallvec![], Rc::clone(&a_b));
+
+        let a_base = rebuilder.base_provider.provide(
+            "El&", smallvec![(a_b_base, None)], Rc::clone(a));
+
+        let a_b__a = rebuilder.expr_provider.imp(&a_b, a);
+        let a_b__a_base = rebuilder.base_provider.provide(
+            "I->", smallvec![(a_base, Some(a_b))], a_b__a);
+
+        a_b__a_base
+    }
+}
+
+impl AxiomRebuild for AxiomRebuilder<5>
+{
+    fn rebuild_axiom(rebuilder: &ProofRebuilder, used: &[ExprNode]) -> BaseNode {
+        let (a, b) = (&used[0], &used[1]);
+
+        let a_b = rebuilder.expr_provider.conj(a, b);
+        let a_b_base = rebuilder.base_provider.provide(
+            "Ax", smallvec![], Rc::clone(&a_b));
+
+        let b_base = rebuilder.base_provider.provide(
+            "Er&", smallvec![(a_b_base, None)], Rc::clone(b));
+
+        let a_b__b = rebuilder.expr_provider.imp(&a_b, b);
+        let a_b__b_base = rebuilder.base_provider.provide(
+            "I->", smallvec![(b_base, Some(a_b))], a_b__b);
+
+        a_b__b_base
     }
 }
 
