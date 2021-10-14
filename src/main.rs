@@ -72,10 +72,10 @@ fn print_nat_base_tree_dfs(
     write!(writer, "[{}] ", depth)?;
     print_hypothesis(writer, hyp)?;
     if neither_is_empty {
-        write!(writer, ", ")?;
+        write!(writer, ",")?;
     }
     print_hypothesis(writer, added_hyp)?;
-    writeln!(writer, "|- {} [{}]", base.curr(), base.shift())?;
+    writeln!(writer, "|-{} [{}]", base.curr(), base.shift())?;
     Ok(())
 }
 

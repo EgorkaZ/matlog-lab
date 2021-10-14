@@ -229,7 +229,7 @@ impl Display for Expr
         match self {
             Variable(name) => name.fmt(f),
             UnOp(op, sub) => f.write_fmt(format_args!("({}{})", op, sub)),
-            BiOp(op, l, r) => f.write_fmt(format_args!("({} {} {})", l, op, r)),
+            BiOp(op, l, r) => f.write_fmt(format_args!("({}{}{})", l, op, r)),
             Bottom => f.write_str("_|_"),
         }
     }
